@@ -3,12 +3,16 @@ package org.theseed.web.rna;
 import java.util.Arrays;
 
 import org.theseed.web.ColumnProcessor;
+import org.theseed.web.ColumnSaveProcessor;
+import org.theseed.web.RnaMetaProcessor;
 import org.theseed.web.WebProcessor;
 
 /**
  * Commands for Web Pages for RNA Threonine Display.
  *
- *
+ * columns		show columnar comparison data for FPKM and TPM results
+ * meta			show metadata for samples
+ * saveCols		save the current column configuration under a new name
  *
  */
 public class App
@@ -23,6 +27,12 @@ public class App
         switch (command) {
         case "columns" :
             processor = new ColumnProcessor();
+            break;
+        case "meta" :
+            processor = new RnaMetaProcessor();
+            break;
+        case "saveCols" :
+            processor = new ColumnSaveProcessor();
             break;
         default:
             throw new RuntimeException("Invalid command " + command);

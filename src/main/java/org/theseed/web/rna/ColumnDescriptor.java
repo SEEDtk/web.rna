@@ -182,11 +182,20 @@ public abstract class ColumnDescriptor {
      * @param data				RNA data repository
      */
     public static ColumnDescriptor[] parse(String cookieString, RnaData data) {
-        String[] columns = StringUtils.split(cookieString, COL_SEP_CHAR);
+        String[] columns = getSpecStrings(cookieString);
         ColumnDescriptor[] retVal = new ColumnDescriptor[columns.length];
         for (int i = 0; i < columns.length; i++)
             retVal[i] = ColumnDescriptor.create(columns[i], data);
         return retVal;
+    }
+
+    /**
+     * @return the specification strings for the columns in the specified definition string
+     *
+     * @param cookieString		column definition string
+     */
+    public static String[] getSpecStrings(String cookieString) {
+        return StringUtils.split(cookieString, COL_SEP_CHAR);
     }
 
     /**

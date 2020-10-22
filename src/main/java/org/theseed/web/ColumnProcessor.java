@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +21,7 @@ import org.theseed.reports.Key;
 import org.theseed.rna.RnaData;
 import org.theseed.web.rna.ColumnDescriptor;
 
+import j2html.tags.ContainerTag;
 import j2html.tags.DomContent;
 import static j2html.TagCreator.*;
 
@@ -40,12 +42,17 @@ import static j2html.TagCreator.*;
  * column is present, then the display is differential with the primary sample in the numerator.  A list of column
  * specifications for previous columns is stored in the workspace data.
  *
+ * Column specifications are kept in a cookie variable.  The variable name is "column." plus the configuration name.  The
+ * configuration name cannot contain spaces or special characters.
+ *
  * The command-line options are as follows.
  *
  * --sample1	name of the primary sample for the next column
  * --sample2	name of the secondary sample (optional)
  * --sortCol	index of the column to sort on
  * --reset		erase all of the saved columns (this automatically changes sortCol to 1)
+ * --raw		display raw numbers instead of normalized results
+ * --name		name of the column configuration to use
  *
  * @author Bruce Parrello
  *
@@ -57,6 +64,15 @@ public class ColumnProcessor extends WebProcessor {
     protected static Logger log = LoggerFactory.getLogger(ColumnProcessor.class);
     /** RNA data repository */
     private RnaData data;
+    /** cookie file name */
+    public static final String RNA_COLUMN_COOKIE_FILE = "web.rna.columns";
+    /** TPM file name */
+    public static final String RNA_DATA_FILE_NAME = "fpkm.ser";
+    /** FPKM file name */
+    public static final String RNA_RAW_DATA_FILE_NAME = "fpkm.raw.ser";
+    /** column configuration variable name prefix */
+    public static final String COLUMNS_PREFIX = "Columns.";
+
 
     // COMMAND-LINE OPTIONS
 
@@ -72,9 +88,17 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--sortCol", usage = "sort column index")
     protected int sortCol;
 
+    /** if specified, raw numbers will be displayed */
+    @Option(name = "--raw", usage = "display raw FPKM instead of TPM")
+    protected boolean rawFlag;
+
     /** reset flag */
     @Option(name = "--reset", usage = "if specified, existing columns are deleted")
     protected boolean resetFlag;
+
+    /** configuration name */
+    @Option(name = "--name", usage = "configuration name")
+    protected String configuration;
 
     @Override
     protected void setWebDefaults() {
@@ -82,6 +106,8 @@ public class ColumnProcessor extends WebProcessor {
         this.sample1 = "";
         this.sample2 = "";
         this.resetFlag = false;
+        this.rawFlag = false;
+        this.configuration = "Default";
     }
 
     @Override
@@ -89,8 +115,9 @@ public class ColumnProcessor extends WebProcessor {
         // Read in the RNA data file.
         try {
             log.info("Loading RNA-seq data.");
-            this.data = RnaData.load(new File(this.getCoreDir(), "fpkm.ser"));
-            log.info("{} samples in RNA dataset.", this.data.size());
+            File dataFile = new File(this.getCoreDir(), (this.rawFlag ? RNA_RAW_DATA_FILE_NAME : RNA_DATA_FILE_NAME));
+            this.data = RnaData.load(dataFile);
+            log.info("{} samples in RNA dataset {}.", this.data.size(), dataFile);
         } catch (ClassNotFoundException e) {
             throw new RuntimeException("Class not found: " + e.getMessage());
         }
@@ -104,7 +131,7 @@ public class ColumnProcessor extends WebProcessor {
 
     @Override
     protected String getCookieName() {
-        return "web.rna.columns";
+        return RNA_COLUMN_COOKIE_FILE;
     }
 
     @Override
@@ -112,12 +139,12 @@ public class ColumnProcessor extends WebProcessor {
         String cookieString = "";
         if (! this.resetFlag) {
             // Here we are not resetting, so we want to keep the old columns.
-            cookieString = cookies.get("Columns", "");
+            cookieString = cookies.get(COLUMNS_PREFIX + this.configuration, "");
             // Add the next column.
             cookieString = ColumnDescriptor.addColumn(cookieString, this.sample1 + "," + this.sample2);
         }
         // Save the columns for next time.
-        cookies.put("Columns", cookieString);
+        cookies.put(COLUMNS_PREFIX + this.configuration, cookieString);
         // Split the cookie string into columns.
         ColumnDescriptor[] columns = ColumnDescriptor.parse(cookieString, this.data);
         // The two page components will be put here.
@@ -130,7 +157,7 @@ public class ColumnProcessor extends WebProcessor {
             // Create the column specs.
             ColSpec[] specs = new ColSpec[columns.length + 2];
             specs[0] = new ColSpec.Normal("peg_id");
-            specs[1] = new ColSpec.Narrow("function");
+            specs[1] = new ColSpec.Normal("gene");
             for (int i = 0; i < columns.length; i++) {
                 specs[i+2] = new ColSpec.Fraction(columns[i].getTitle());
                 specs[i+2].setTip(columns[i].getTooltip());
@@ -145,7 +172,7 @@ public class ColumnProcessor extends WebProcessor {
                 // Create the row.
                 HtmlTable<Key.RevFloat>.Row tableRow = table.new Row(rowKey);
                 tableRow.add(ColumnDescriptor.fidLink(feat.getId()));
-                tableRow.add(feat.getFunction());
+                tableRow.add(feat.getGene());
                 // Now fill in the numbers.
                 for (int i = 0; i < columns.length; i++)
                     tableRow.add(columns[i].getValue(feat));
@@ -153,10 +180,9 @@ public class ColumnProcessor extends WebProcessor {
             // Format the table and store it in the output list.
             parts.add(table.output());
         }
-        // Build the form.
-        HtmlForm form = buildForm(columns);
-        // Format the form at the end of the display.
-        parts.add(form.output());
+        // Build the forms.
+        DomContent forms = buildForms(columns, cookies);
+        parts.add(forms);
         // Render the web page.  We build an invisible one-row table with each component in a cell.
         DomContent assembly = this.getPageWriter().scrollBlock(table(tr().with(parts.stream().map(x -> td(x).withClass("borderless")))).withClass("borderless"));
         DomContent wrapped = this.getPageWriter().highlightBlock(assembly);
@@ -165,14 +191,15 @@ public class ColumnProcessor extends WebProcessor {
     }
 
     /**
-     * @return a form for generating the next column
+     * @return HTML for the various forms required
      *
      * @param columns	columns currently present
+     * @param cookies	cookie file containing the column configurations
      *
      * @throws IOException
      */
-    private HtmlForm buildForm(ColumnDescriptor[] columns) throws IOException {
-        // Now we have to build the form.
+    private DomContent buildForms(ColumnDescriptor[] columns, CookieFile cookies) throws IOException {
+        // First we build the main form.
         HtmlForm form = new HtmlForm("rna", "columns", this);
         // Get the list of samples and add the sample selectors.
         List<String> samples = this.data.getSamples().stream().map(x -> x.getName()).collect(Collectors.toList());
@@ -183,9 +210,35 @@ public class ColumnProcessor extends WebProcessor {
         List<String> sortCols = Arrays.stream(columns).map(x -> x.getTitle()).collect(Collectors.toList());
         String defaultCol = (sortCols.size() > 0 ? sortCols.get(this.sortCol) : null);
         form.addChoiceBoxIndexed("sortCol", "Column for sorting", defaultCol, sortCols);
-        // Add the rest checkbox.
-        form.addCheckBoxRow("reset", "Remove existing columns");
-        return form;
+        // Add the checkboxes.
+        form.addCheckBoxWithDefault("reset", "Remove existing columns", false);
+        form.addCheckBoxWithDefault("raw", "display raw FPKM numbers", this.rawFlag);
+        // Add a hidden field to maintain the configuration name.
+        form.addHidden("name", this.configuration);
+        // Now create the load form.
+        HtmlForm lForm = new HtmlForm("rna", "columns", this);
+        // Get a list of the existing configuration names.
+        List<String> configs = Arrays.stream(cookies.getKeys()).filter(x -> StringUtils.startsWith(x, COLUMNS_PREFIX))
+                .map(x -> StringUtils.removeStart(x, COLUMNS_PREFIX)).sorted().collect(Collectors.toList());
+        // Build the form.
+        lForm.addChoiceBox("name", "Configuration to Load", this.configuration, configs);
+        lForm.setTarget("_blank");
+        // Create the save form.
+        HtmlForm sForm = new HtmlForm("rna", "saveCols", this);
+        sForm.addHidden("old", this.configuration);
+        sForm.addHidden("env", "IFRAME");
+        sForm.addTextRow("name", "New Configuration to Create", "");
+        sForm.setTarget("saveResult");
+        // Create the result frame for the save form.
+        ContainerTag iFrame = iframe().withName("saveResult").withStyle("height: 4em; width: 100%;");
+        // Get a link to the sample summary page.
+        String metaLink = this.getPageWriter().local_url("/rna.cgi/meta", this.getWorkSpace());
+        DomContent metaLinkHtml = a("Display Summary of Samples").withHref(metaLink).withTarget("_blank");
+        DomContent retVal = div(h2(metaLinkHtml), h2("Add New Column / Configure").withClass("form"), form.output(),
+                h2("Save Configuration").withClass("form"), sForm.output(),
+                iFrame, h2("Load Configuration").withClass("form"), lForm.output()
+                ).withClass("center");
+        return retVal;
     }
 
 
