@@ -36,8 +36,9 @@ public class SimpleColumnDescriptor extends ColumnDescriptor {
     }
 
     @Override
-    protected void init() {
+    protected boolean init() {
         this.colIdx = this.getColIdx(this.getSample1());
+        return (this.colIdx >= 0);
     }
 
 }

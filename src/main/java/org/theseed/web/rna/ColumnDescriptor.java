@@ -3,6 +3,7 @@
  */
 package org.theseed.web.rna;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
@@ -10,7 +11,6 @@ import org.apache.commons.text.TextStringBuilder;
 import org.theseed.reports.LinkObject;
 import org.theseed.rna.RnaData;
 import org.theseed.rna.RnaData.FeatureData;
-
 import j2html.tags.DomContent;
 
 /**
@@ -23,10 +23,6 @@ import j2html.tags.DomContent;
  */
 public abstract class ColumnDescriptor {
 
-    /**
-     *
-     */
-    private static final String COL_SEP_CHAR = ";";
     // FIELDS
     /** RNA data repository */
     private RnaData data;
@@ -34,6 +30,10 @@ public abstract class ColumnDescriptor {
     private String sample1;
     /** linker for HTML */
     private static final LinkObject linker = new LinkObject.Patric();
+    /** separator character for sort column index */
+    private static final String SORT_SEP_CHAR = "|";
+    /** separator character for column specifications */
+    private static final String COL_SEP_CHAR = ";";
 
     /**
      * Create a column descriptor from a save string.
@@ -55,7 +55,8 @@ public abstract class ColumnDescriptor {
         retVal.sample1 = parts[0];
         retVal.data = data;
         // Initialize the descriptor.
-        retVal.init();
+        if (! retVal.init())
+            retVal = null;
         return retVal;
     }
 
@@ -76,16 +77,20 @@ public abstract class ColumnDescriptor {
 
     /**
      * Initialize the private data of the descriptor.
+     *
+     * @return TRUE if the column is valid, else FALSE
      */
-    protected abstract void init();
+    protected abstract boolean init();
 
     /**
-     * @return the RNA repository column index for the specified sample
+     * @return the RNA repository column index for the specified sample, or -1 if it is not found
      *
      * @param sample	name of the target sample
      */
     protected int getColIdx(String sample) {
-        return this.data.getColIdx(sample);
+        Integer retVal = this.data.findColIdx(sample);
+        if (retVal == null) retVal = -1;
+        return (int) retVal;
     }
 
     /**
@@ -137,19 +142,19 @@ public abstract class ColumnDescriptor {
      * @return the new cookie string
      */
     public static String addColumn(String cookieString, String newColumn) {
-        String retVal;
+        // Remove the sort column index.
+        String retVal = StringUtils.substringBefore(cookieString, SORT_SEP_CHAR);
+        // Check the nature of the new column.
         if (newColumn.length() <= 1) {
             // Here there is no new column.
-            retVal = cookieString;
         } else if (cookieString.isEmpty()) {
             // Here there is ONLY the new column.
             retVal = newColumn;
         } else if (StringUtils.endsWith(cookieString, newColumn)) {
             // Here we are repeating the same column.  This is usually a mistake by the user.
-            retVal = cookieString;
         } else {
             // Here we are really adding a new column to existing columns.
-            retVal = cookieString + COL_SEP_CHAR + newColumn;
+            retVal = retVal + COL_SEP_CHAR + newColumn;
         }
         return retVal;
     }
@@ -183,10 +188,14 @@ public abstract class ColumnDescriptor {
      */
     public static ColumnDescriptor[] parse(String cookieString, RnaData data) {
         String[] columns = getSpecStrings(cookieString);
-        ColumnDescriptor[] retVal = new ColumnDescriptor[columns.length];
-        for (int i = 0; i < columns.length; i++)
-            retVal[i] = ColumnDescriptor.create(columns[i], data);
-        return retVal;
+        List<ColumnDescriptor> buffer = new ArrayList<ColumnDescriptor>(columns.length);
+        for (int i = 0; i < columns.length; i++) {
+            ColumnDescriptor column = ColumnDescriptor.create(columns[i], data);
+            if (column != null)
+                buffer.add(column);
+        }
+        ColumnDescriptor[] retVal = new ColumnDescriptor[buffer.size()];
+        return buffer.toArray(retVal);
     }
 
     /**
@@ -195,7 +204,21 @@ public abstract class ColumnDescriptor {
      * @param cookieString		column definition string
      */
     public static String[] getSpecStrings(String cookieString) {
-        return StringUtils.split(cookieString, COL_SEP_CHAR);
+        String columnPart = StringUtils.substringBefore(cookieString, SORT_SEP_CHAR);
+        return StringUtils.split(columnPart, COL_SEP_CHAR);
+    }
+
+    /**
+     * @return the sort column for the specified definition string
+     *
+     * @param cookieString		column definition string
+     */
+    public static int getSortCol(String cookieString) {
+        int retVal = 0;
+        String sortPart = StringUtils.substringAfter(cookieString, SORT_SEP_CHAR);
+        if (! sortPart.isEmpty())
+            retVal = Integer.valueOf(sortPart);
+        return retVal;
     }
 
     /**
@@ -205,6 +228,16 @@ public abstract class ColumnDescriptor {
      */
     public static DomContent fidLink(String id) {
         return linker.featureLink(id);
+    }
+
+    /**
+     * Format the information about the current configuration.
+     *
+     * @param cookieString		column string
+     * @param sortCol			sort column
+     */
+    public static String savecookies(String cookieString, int sortCol) {
+        return String.format("%s%s%d", cookieString, SORT_SEP_CHAR, sortCol);
     }
 
 }

@@ -61,9 +61,10 @@ public class DifferentialColumnDescriptor extends ColumnDescriptor {
     }
 
     @Override
-    protected void init() {
+    protected boolean init() {
         this.colIdx1 = this.getColIdx(this.getSample1());
         this.colIdx2 = this.getColIdx(this.sample2);
+        return (this.colIdx1 >= 0 && this.colIdx2 >= 0);
     }
 
 }

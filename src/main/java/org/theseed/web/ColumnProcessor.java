@@ -102,7 +102,7 @@ public class ColumnProcessor extends WebProcessor {
 
     @Override
     protected void setWebDefaults() {
-        this.sortCol = 0;
+        this.sortCol = -1;
         this.sample1 = "";
         this.sample2 = "";
         this.resetFlag = false;
@@ -139,12 +139,17 @@ public class ColumnProcessor extends WebProcessor {
         String cookieString = "";
         if (! this.resetFlag) {
             // Here we are not resetting, so we want to keep the old columns.
-            cookieString = cookies.get(COLUMNS_PREFIX + this.configuration, "");
-            // Add the next column.
-            cookieString = ColumnDescriptor.addColumn(cookieString, this.sample1 + "," + this.sample2);
+            String oldCookieString = cookies.get(COLUMNS_PREFIX + this.configuration, "");
+            // Add the next column.  This deletes the sort information.
+            cookieString = ColumnDescriptor.addColumn(oldCookieString, this.sample1 + "," + this.sample2);
+            // Is the sort column unspecified?
+            if (this.sortCol < 0) {
+                // Yes.  Extract it from the original string.
+                this.sortCol = ColumnDescriptor.getSortCol(oldCookieString);
+            }
         }
         // Save the columns for next time.
-        cookies.put(COLUMNS_PREFIX + this.configuration, cookieString);
+        cookies.put(COLUMNS_PREFIX + this.configuration, ColumnDescriptor.savecookies(cookieString, this.sortCol));
         // Split the cookie string into columns.
         ColumnDescriptor[] columns = ColumnDescriptor.parse(cookieString, this.data);
         // The two page components will be put here.
