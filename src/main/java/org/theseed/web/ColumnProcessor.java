@@ -67,9 +67,9 @@ public class ColumnProcessor extends WebProcessor {
     /** cookie file name */
     public static final String RNA_COLUMN_COOKIE_FILE = "web.rna.columns";
     /** TPM file name */
-    public static final String RNA_DATA_FILE_NAME = "fpkm.ser";
+    public static final String RNA_DATA_FILE_NAME = "tpm.ser";
     /** FPKM file name */
-    public static final String RNA_RAW_DATA_FILE_NAME = "fpkm.raw.ser";
+    public static final String RNA_RAW_DATA_FILE_NAME = "fpkm.ser";
     /** column configuration variable name prefix */
     public static final String COLUMNS_PREFIX = "Columns.";
 
