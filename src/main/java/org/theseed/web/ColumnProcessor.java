@@ -176,15 +176,15 @@ public class ColumnProcessor extends WebProcessor {
                 cookieString = oldCookieString;
                 for (String newColumn : columns)
                     cookieString = ColumnDescriptor.addColumn(cookieString, newColumn);
-                // Are we deleting a column?
-                if (this.deleteCol >= 0) {
-                    cookieString = ColumnDescriptor.deleteColumn(cookieString, this.deleteCol);
-                }
-                // Is the sort column unspecified?
-                if (this.sortCol < 0) {
-                    // Yes.  Extract it from the original string.
-                    this.sortCol = ColumnDescriptor.getSortCol(oldCookieString);
-                }
+            }
+            // Are we deleting a column?
+            if (this.deleteCol >= 0) {
+                cookieString = ColumnDescriptor.deleteColumn(cookieString, this.deleteCol);
+            }
+            // Is the sort column unspecified?
+            if (this.sortCol < 0) {
+                // Yes.  Extract it from the original string.
+                this.sortCol = ColumnDescriptor.getSortCol(oldCookieString);
             }
         }
         // Save the columns for next time.
