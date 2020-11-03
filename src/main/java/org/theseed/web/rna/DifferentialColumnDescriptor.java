@@ -4,7 +4,9 @@
 package org.theseed.web.rna;
 
 import org.apache.commons.lang3.StringUtils;
+import org.theseed.reports.Key;
 import org.theseed.rna.RnaData;
+import org.theseed.rna.RnaData.FeatureData;
 
 /**
  * This displays a column that contains the ratio between expression levels for two samples.
@@ -35,12 +37,8 @@ public class DifferentialColumnDescriptor extends ColumnDescriptor {
     public double getValue(RnaData.FeatureData feat) {
         double retVal;
         double dem = this.getWeight(feat, this.colIdx2);
-        if (dem == 0.0)
-            retVal = Double.POSITIVE_INFINITY;
-        else {
-            double num = this.getWeight(feat, this.colIdx1);
-            retVal = num / dem;
-        }
+        double num = this.getWeight(feat, this.colIdx1);
+        retVal = num / dem;
         return retVal;
     }
 
@@ -65,6 +63,13 @@ public class DifferentialColumnDescriptor extends ColumnDescriptor {
         this.colIdx1 = this.getColIdx(this.getSample1());
         this.colIdx2 = this.getColIdx(this.sample2);
         return (this.colIdx1 >= 0 && this.colIdx2 >= 0);
+    }
+
+    @Override
+    public Key.RevRatio getKey(FeatureData feat) {
+        double dem = this.getWeight(feat, this.colIdx2);
+        double num = this.getWeight(feat, this.colIdx1);
+        return new Key.RevRatio(num, dem);
     }
 
 }

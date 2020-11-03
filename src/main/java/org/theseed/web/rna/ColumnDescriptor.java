@@ -8,6 +8,7 @@ import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.TextStringBuilder;
+import org.theseed.reports.Key;
 import org.theseed.reports.LinkObject;
 import org.theseed.rna.RnaData;
 import org.theseed.rna.RnaData.FeatureData;
@@ -130,6 +131,13 @@ public abstract class ColumnDescriptor {
     public abstract String getTooltip();
 
     /**
+     * @return the table sort key for the specified feature in this column.
+     *
+     * @fid		ID of the feature of interest
+     */
+    public abstract Key.RevRatio getKey(FeatureData feat);
+
+    /**
      * @return the primary sample name
      */
     public String getSample1() {
@@ -147,10 +155,10 @@ public abstract class ColumnDescriptor {
         // Check the nature of the new column.
         if (newColumn.length() <= 1) {
             // Here there is no new column.
-        } else if (cookieString.isEmpty()) {
+        } else if (retVal.isEmpty()) {
             // Here there is ONLY the new column.
             retVal = newColumn;
-        } else if (StringUtils.endsWith(cookieString, newColumn)) {
+        } else if (StringUtils.endsWith(retVal, newColumn)) {
             // Here we are repeating the same column.  This is usually a mistake by the user.
         } else {
             // Here we are really adding a new column to existing columns.
@@ -158,6 +166,25 @@ public abstract class ColumnDescriptor {
         }
         return retVal;
     }
+
+    /**
+     * Delete a column from a cookie string.
+     *
+     * @param cookieString	cookie string to modify
+     * @param idx			index of column to delete
+     *
+     * @return the modified cookie string
+     */
+    public static String deleteColumn(String cookieString, int idx) {
+        String columns[] = getSpecStrings(cookieString);
+        TextStringBuilder retVal = new TextStringBuilder(cookieString.length());
+        for (int i = 0; i < columns.length; i++) {
+            if (i != idx)
+                retVal.appendSeparator(';').append(columns[i]);
+        }
+        return retVal.toString();
+    }
+
 
     /**
      * @return the tooltip string for the specified sample

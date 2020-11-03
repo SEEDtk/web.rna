@@ -20,6 +20,8 @@ import org.theseed.reports.HtmlTable;
 import org.theseed.reports.Key;
 import org.theseed.rna.RnaData;
 import org.theseed.web.rna.ColumnDescriptor;
+import org.theseed.web.rna.NewColumnCreator;
+import org.theseed.web.rna.SimpleColumnDescriptor;
 
 import j2html.tags.ContainerTag;
 import j2html.tags.DomContent;
@@ -50,9 +52,12 @@ import static j2html.TagCreator.*;
  * --sample1	name of the primary sample for the next column
  * --sample2	name of the secondary sample (optional)
  * --sortCol	index of the column to sort on
+ * --deleteCol	index of a column to delete
  * --reset		erase all of the saved columns (this automatically changes sortCol to 1)
  * --raw		display raw numbers instead of normalized results
  * --name		name of the column configuration to use
+ * --cmd		command to run for new columns:  TIME1 (all times for sample 1), TIMES (matching times for both samples),
+ * 				SINGLE (only one column)
  *
  * @author Bruce Parrello
  *
@@ -64,6 +69,8 @@ public class ColumnProcessor extends WebProcessor {
     protected static Logger log = LoggerFactory.getLogger(ColumnProcessor.class);
     /** RNA data repository */
     private RnaData data;
+    /** list of sample names */
+    private List<String> samples;
     /** cookie file name */
     public static final String RNA_COLUMN_COOKIE_FILE = "web.rna.columns";
     /** TPM file name */
@@ -72,6 +79,10 @@ public class ColumnProcessor extends WebProcessor {
     public static final String RNA_RAW_DATA_FILE_NAME = "fpkm.ser";
     /** column configuration variable name prefix */
     public static final String COLUMNS_PREFIX = "Columns.";
+    /** number of columns before the data section */
+    private static final int HEAD_COLS = 4;
+    /** URL generator for column delete */
+    private static final String DELETE_COL_URL_FORMAT = "/rna.cgi/columns?sortCol=%d;deleteCol=%d";
 
 
     // COMMAND-LINE OPTIONS
@@ -84,9 +95,13 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--sample2", usage = "secondary sample name")
     protected String sample2;
 
-    /** index of sort column (0 = first data column) */
+    /** index of sort column (0 = first data column, negative = use saved value) */
     @Option(name = "--sortCol", usage = "sort column index")
     protected int sortCol;
+
+    /** index of column to delete (0 = first data column, negative = no deletion) */
+    @Option(name = "--deleteCol", usage = "index of column to delete")
+    protected int deleteCol;
 
     /** if specified, raw numbers will be displayed */
     @Option(name = "--raw", usage = "display raw FPKM instead of TPM")
@@ -100,14 +115,20 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--name", usage = "configuration name")
     protected String configuration;
 
+    /** new-column strategy */
+    @Option(name = "--cmd", usage = "strategy for new columns")
+    protected NewColumnCreator.Type strategy;
+
     @Override
     protected void setWebDefaults() {
         this.sortCol = -1;
+        this.deleteCol = -1;
         this.sample1 = "";
         this.sample2 = "";
         this.resetFlag = false;
         this.rawFlag = false;
         this.configuration = "Default";
+        this.strategy = NewColumnCreator.Type.SINGLE;
     }
 
     @Override
@@ -136,16 +157,34 @@ public class ColumnProcessor extends WebProcessor {
 
     @Override
     protected void runWebCommand(CookieFile cookies) throws Exception {
+        // Create the list of samples.
+        this.samples = this.data.getSamples().stream().map(x -> x.getName()).collect(Collectors.toList());
+        // Build the cookie string describing all the columns.
         String cookieString = "";
         if (! this.resetFlag) {
             // Here we are not resetting, so we want to keep the old columns.
             String oldCookieString = cookies.get(COLUMNS_PREFIX + this.configuration, "");
-            // Add the next column.  This deletes the sort information.
-            cookieString = ColumnDescriptor.addColumn(oldCookieString, this.sample1 + "," + this.sample2);
-            // Is the sort column unspecified?
-            if (this.sortCol < 0) {
-                // Yes.  Extract it from the original string.
-                this.sortCol = ColumnDescriptor.getSortCol(oldCookieString);
+            if (this.sample1.isEmpty()) {
+                // Here no columns are being added.  We add a blank column to clear the sort string.
+                cookieString = ColumnDescriptor.addColumn(oldCookieString, ",");
+            } else {
+                NewColumnCreator creator = this.strategy.create(this.sample1, this.sample2, this.samples);
+                List<String> columns = creator.getNewColumns();
+                log.info("{} new columns computed.", columns.size());
+                // Get a copy of the cookie string so we can update it.  The first update will delete the sort
+                // information.
+                cookieString = oldCookieString;
+                for (String newColumn : columns)
+                    cookieString = ColumnDescriptor.addColumn(cookieString, newColumn);
+                // Are we deleting a column?
+                if (this.deleteCol >= 0) {
+                    cookieString = ColumnDescriptor.deleteColumn(cookieString, this.deleteCol);
+                }
+                // Is the sort column unspecified?
+                if (this.sortCol < 0) {
+                    // Yes.  Extract it from the original string.
+                    this.sortCol = ColumnDescriptor.getSortCol(oldCookieString);
+                }
             }
         }
         // Save the columns for next time.
@@ -160,28 +199,31 @@ public class ColumnProcessor extends WebProcessor {
             if (this.sortCol < 0 || this.sortCol >= columns.length)
                 this.sortCol = 0;
             // Create the column specs.
-            ColSpec[] specs = new ColSpec[columns.length + 2];
-            specs[0] = new ColSpec.Normal("peg_id");
-            specs[1] = new ColSpec.Normal("gene");
-            for (int i = 0; i < columns.length; i++) {
-                specs[i+2] = new ColSpec.Fraction(columns[i].getTitle());
-                specs[i+2].setTip(columns[i].getTooltip());
-            }
-            HtmlTable<Key.RevFloat> table = new HtmlTable<>(specs);
+            ColSpec[] specs = new ColSpec[columns.length + HEAD_COLS];
+            specs[0] = new ColSpec.Num("#");
+            specs[1] = new ColSpec.Normal("peg_id");
+            specs[2] = new ColSpec.Normal("gene");
+            specs[3] = new ColSpec.Num("na_len");
+            for (int i = 0; i < columns.length; i++)
+                specs[i+HEAD_COLS] = this.columnSpec(columns[i], i);
+            HtmlTable<Key.RevRatio> table = new HtmlTable<>(specs);
             // Now we create a row for each feature.
             for (RnaData.Row dataRow : this.data) {
                 // Get the feature for this row.
                 RnaData.FeatureData feat = dataRow.getFeat();
                 // Get the sort key for this row.
-                Key.RevFloat rowKey = new Key.RevFloat(columns[this.sortCol].getValue(feat));
+                Key.RevRatio rowKey = columns[this.sortCol].getKey(feat);
                 // Create the row.
-                HtmlTable<Key.RevFloat>.Row tableRow = table.new Row(rowKey);
+                HtmlTable<Key.RevRatio>.Row tableRow = table.new Row(rowKey);
+                tableRow.add(0);
                 tableRow.add(ColumnDescriptor.fidLink(feat.getId()));
                 tableRow.add(feat.getGene());
+                tableRow.add(feat.getLocation().getLength());
                 // Now fill in the numbers.
                 for (int i = 0; i < columns.length; i++)
                     tableRow.add(columns[i].getValue(feat));
             }
+            table.setIndexColumn(0);
             // Format the table and store it in the output list.
             parts.add(table.output());
         }
@@ -196,6 +238,40 @@ public class ColumnProcessor extends WebProcessor {
     }
 
     /**
+     * @return the column specification for the specified data column descriptor
+     *
+     * @param columnDescriptor	descriptor specifying this column
+     * @param idx				index of this column
+     */
+    private ColSpec columnSpec(ColumnDescriptor columnDescriptor, int idx) {
+        // Compute the index of the new sort column if this column is deleted.
+        int newSort;
+        if (this.sortCol < idx)
+            newSort = this.sortCol;
+        else if (this.sortCol == idx)
+            newSort = 0;
+        else
+            newSort = this.sortCol - 1;
+        // Form a URL for deleting this column.
+        String url = this.getPageWriter().local_url(String.format(DELETE_COL_URL_FORMAT,
+                newSort, idx), this.getWorkSpace());
+        ContainerTag button = a(button("Delete")).withHref(url);
+        DomContent buttons;
+        if (columnDescriptor instanceof SimpleColumnDescriptor) {
+            ContainerTag button2 = button("Primary").attr("onclick",
+                    "storeVal('sample1', '" + columnDescriptor.getSample1() + "');");
+            ContainerTag button3 = button("Optional").attr("onclick",
+                    "storeVal('sample2', '" + columnDescriptor.getSample1() + "');");
+            buttons = join(button, button2, button3);
+        } else
+            buttons = button;
+        DomContent title = join(columnDescriptor.getTitle(), buttons);
+        ColSpec retVal = new ColSpec.Fraction(title);
+        retVal.setTip(columnDescriptor.getTooltip());
+        return retVal;
+    }
+
+    /**
      * @return HTML for the various forms required
      *
      * @param columns	columns currently present
@@ -206,15 +282,20 @@ public class ColumnProcessor extends WebProcessor {
     private DomContent buildForms(ColumnDescriptor[] columns, CookieFile cookies) throws IOException {
         // First we build the main form.
         HtmlForm form = new HtmlForm("rna", "columns", this);
-        // Get the list of samples and add the sample selectors.
-        List<String> samples = this.data.getSamples().stream().map(x -> x.getName()).collect(Collectors.toList());
-        samples.add("");
-        form.addChoiceBox("sample1", "Primary RNA Sampling", "", samples);
-        form.addChoiceBox("sample2", "Optional Denominator Sample", "", samples);
+        // Get the list of samples and add the null selection.
+        List<String> samples0 = new ArrayList<String>(this.samples);
+        samples0.add("");
+        // Create the sample data list.
+        form.createDataList(samples0, "sampleNameList");
+        // Create the sample selectors.
+        form.addSearchRow("sample1", "Primary RNA Sampling", "", "sampleNameList");
+        form.addSearchRow("sample2", "Optional Denominator Sample", "", "sampleNameList");
         // Add the sort column specifier.
         List<String> sortCols = Arrays.stream(columns).map(x -> x.getTitle()).collect(Collectors.toList());
         String defaultCol = (sortCols.size() > 0 ? sortCols.get(this.sortCol) : null);
-        form.addChoiceBoxIndexed("sortCol", "Column for sorting", defaultCol, sortCols);
+        form.addChoiceIndexedRow("sortCol", "Column for sorting", defaultCol, sortCols);
+        // Add the strategy.
+        form.addEnumRow("cmd", "New-column Strategy", NewColumnCreator.Type.SINGLE, NewColumnCreator.Type.values());
         // Add the checkboxes.
         form.addCheckBoxWithDefault("reset", "Remove existing columns", false);
         form.addCheckBoxWithDefault("raw", "display raw FPKM numbers", this.rawFlag);
@@ -223,10 +304,9 @@ public class ColumnProcessor extends WebProcessor {
         // Now create the load form.
         HtmlForm lForm = new HtmlForm("rna", "columns", this);
         // Get a list of the existing configuration names.
-        List<String> configs = Arrays.stream(cookies.getKeys()).filter(x -> StringUtils.startsWith(x, COLUMNS_PREFIX))
-                .map(x -> StringUtils.removeStart(x, COLUMNS_PREFIX)).sorted().collect(Collectors.toList());
+        List<String> configs = getConfigurations(cookies);
         // Build the form.
-        lForm.addChoiceBox("name", "Configuration to Load", this.configuration, configs);
+        lForm.addChoiceRow("name", "Configuration to Load", this.configuration, configs);
         lForm.setTarget("_blank");
         // Create the save form.
         HtmlForm sForm = new HtmlForm("rna", "saveCols", this);
@@ -239,11 +319,23 @@ public class ColumnProcessor extends WebProcessor {
         // Get a link to the sample summary page.
         String metaLink = this.getPageWriter().local_url("/rna.cgi/meta", this.getWorkSpace());
         DomContent metaLinkHtml = a("Display Summary of Samples").withHref(metaLink).withTarget("_blank");
+        String manageLink = this.getPageWriter().local_url("/rna.cgi/manage", this.getWorkSpace());
+        DomContent manageLinkHtml = a("Manage Saved Configurations").withHref(manageLink);
         DomContent retVal = div(h2(metaLinkHtml), h2("Add New Column / Configure").withClass("form"), form.output(),
-                h2("Save Configuration").withClass("form"), sForm.output(),
-                iFrame, h2("Load Configuration").withClass("form"), lForm.output()
+                h2("Save Configuration").withClass("form"), sForm.output(), iFrame,
+                h2("Load Configuration").withClass("form"), lForm.output(), h2(manageLinkHtml)
                 ).withClass("center");
         return retVal;
+    }
+
+    /**
+     * @return a list of the configuration names
+     *
+     * @param cookies	cookie file containing the configurations
+     */
+    public static List<String> getConfigurations(CookieFile cookies) {
+        return Arrays.stream(cookies.getKeys()).filter(x -> StringUtils.startsWith(x, COLUMNS_PREFIX))
+                .map(x -> StringUtils.removeStart(x, COLUMNS_PREFIX)).sorted().collect(Collectors.toList());
     }
 
 

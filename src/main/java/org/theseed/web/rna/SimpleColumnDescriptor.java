@@ -4,7 +4,9 @@
 package org.theseed.web.rna;
 
 import org.apache.commons.lang3.StringUtils;
+import org.theseed.reports.Key;
 import org.theseed.rna.RnaData;
+import org.theseed.rna.RnaData.FeatureData;
 
 /**
  * This class contains a column that just displays the expression levels for a sample.
@@ -39,6 +41,11 @@ public class SimpleColumnDescriptor extends ColumnDescriptor {
     protected boolean init() {
         this.colIdx = this.getColIdx(this.getSample1());
         return (this.colIdx >= 0);
+    }
+
+    @Override
+    public Key.RevRatio getKey(FeatureData feat) {
+        return new Key.RevRatio(this.getValue(feat), 1.0);
     }
 
 }

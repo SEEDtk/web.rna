@@ -13,6 +13,7 @@ import org.theseed.web.WebProcessor;
  * columns		show columnar comparison data for FPKM and TPM results
  * meta			show metadata for samples
  * saveCols		save the current column configuration under a new name
+ * manage		manage saved column specifications
  *
  */
 public class App
@@ -30,6 +31,9 @@ public class App
             break;
         case "meta" :
             processor = new RnaMetaProcessor();
+            break;
+        case "manage" :
+            processor = new ColumnManageProcessor();
             break;
         case "saveCols" :
             processor = new ColumnSaveProcessor();
