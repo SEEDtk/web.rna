@@ -8,13 +8,17 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.apache.commons.lang3.StringUtils;
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.theseed.reports.ColSpec;
+import org.theseed.reports.CoreHtmlUtilities;
 import org.theseed.reports.HtmlForm;
 import org.theseed.reports.HtmlTable;
 import org.theseed.reports.Key;
@@ -83,6 +87,13 @@ public class ColumnProcessor extends WebProcessor {
     private static final int HEAD_COLS = 4;
     /** URL generator for column delete */
     private static final String DELETE_COL_URL_FORMAT = "/rna.cgi/columns?sortCol=%d;deleteCol=%d";
+    /** definition for filtering checkboxes */
+    private static final String[] CHECK_COLUMNS = new String[] { "Host strain", null, "Core Thr operon",
+            null, null, null, null, "Thr operon induction"};
+    /** checkbox filter ID format */
+    private static final String SELECTOR_FORMAT = "sampleFilter%d";
+    /** name of the sample-name datalist */
+    private static final String SAMPLE_NAME_LIST = "sampleNameList";
 
 
     // COMMAND-LINE OPTIONS
@@ -280,16 +291,18 @@ public class ColumnProcessor extends WebProcessor {
      * @throws IOException
      */
     private DomContent buildForms(ColumnDescriptor[] columns, CookieFile cookies) throws IOException {
-        // First we build the main form.
+        // Here we must build the filtering checkboxes.
+        HtmlTable<Key.Null> filterTable = this.buildFilters();
+        // Now we build the main form.
         HtmlForm form = new HtmlForm("rna", "columns", this);
         // Get the list of samples and add the null selection.
         List<String> samples0 = new ArrayList<String>(this.samples);
         samples0.add("");
         // Create the sample data list.
-        form.createDataList(samples0, "sampleNameList");
+        form.createDataList(samples0, SAMPLE_NAME_LIST);
         // Create the sample selectors.
-        form.addSearchRow("sample1", "Primary RNA Sampling", "", "sampleNameList");
-        form.addSearchRow("sample2", "Optional Denominator Sample", "", "sampleNameList");
+        form.addSearchRow("sample1", "Primary RNA Sampling", "", SAMPLE_NAME_LIST);
+        form.addSearchRow("sample2", "Optional Denominator Sample", "", SAMPLE_NAME_LIST);
         // Add the sort column specifier.
         List<String> sortCols = Arrays.stream(columns).map(x -> x.getTitle()).collect(Collectors.toList());
         String defaultCol = (sortCols.size() > 0 ? sortCols.get(this.sortCol) : null);
@@ -321,10 +334,45 @@ public class ColumnProcessor extends WebProcessor {
         DomContent metaLinkHtml = a("Display Summary of Samples").withHref(metaLink).withTarget("_blank");
         String manageLink = this.getPageWriter().local_url("/rna.cgi/manage", this.getWorkSpace());
         DomContent manageLinkHtml = a("Manage Saved Configurations").withHref(manageLink);
-        DomContent retVal = div(h2(metaLinkHtml), h2("Add New Column / Configure").withClass("form"), form.output(),
+        DomContent retVal = div(h2(metaLinkHtml), h2("Add New Column / Configure").withClass("form"),
+                filterTable.output(), form.output(),
                 h2("Save Configuration").withClass("form"), sForm.output(), iFrame,
                 h2("Load Configuration").withClass("form"), lForm.output(), h2(manageLinkHtml)
                 ).withClass("center");
+        return retVal;
+    }
+
+    /**
+     * @return a table containing checkbox filters for the selection list
+     */
+    private HtmlTable<Key.Null> buildFilters() {
+        // Create a list of sets for the different possible filters.
+        List<Set<String>> filterSets = new ArrayList<Set<String>>();
+        int partLen = 0;
+        for (String sample : this.samples) {
+            String[] parts = StringUtils.split(sample, '_');
+            if (parts.length > partLen) partLen = parts.length;
+            while (filterSets.size() < parts.length)
+                filterSets.add(new TreeSet<String>());
+            for (int i = 0; i < parts.length; i++)
+                filterSets.get(i).add(parts[i]);
+        }
+        // Build the onclick event.
+        List<String> selectors = IntStream.range(0, CHECK_COLUMNS.length).filter(i -> CHECK_COLUMNS[i] != null)
+                .mapToObj(i -> String.format(SELECTOR_FORMAT, i)).collect(Collectors.toList());
+        String onclick = "fixList('" + SAMPLE_NAME_LIST + "', " + Integer.toString(partLen) + ", '"
+                + StringUtils.join(selectors, "', '") + "');";
+        // Now we create the filter table.  We put in one row for each part in the specification.
+        HtmlTable<Key.Null> retVal = new HtmlTable<Key.Null>(new ColSpec.Normal("Field"), new ColSpec.Normal("Filters"));
+        for (int i = 0; i < CHECK_COLUMNS.length; i++) {
+            if (CHECK_COLUMNS[i] != null) {
+                // Here we have a filtering item of interest.
+                Object[] checkboxes = filterSets.get(i).stream().map(x -> CoreHtmlUtilities.checkBox(x, x, true, onclick))
+                        .toArray();
+                DomContent checks = div(join(checkboxes)).withId(String.format(SELECTOR_FORMAT, i));
+                retVal.new Row(Key.NONE).add(CHECK_COLUMNS[i]).add(checks);
+            }
+        }
         return retVal;
     }
 
