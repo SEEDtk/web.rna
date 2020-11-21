@@ -53,6 +53,16 @@ public class ScatterProcessor extends WebProcessor {
     private int[][] cMatrix;
     /** tabular report */
     private HtmlTable<Key.RevFloat> tabularReport;
+    /** buffer size around dot for click event */
+    private static final double CLICK_RADIUS = 0.2;
+    /** function body for click event */
+    private static final String SET_BOUNDS = String.format(
+            "function setBounds(x, y) {%n" +
+            "    $(\"#runForm input[name=prodMin]\").val(x - %f);%n" +
+            "    $(\"#runForm input[name=prodMax]\").val(x + %f);%n" +
+            "    $(\"#runForm input[name=predMin]\").val(y - %f);%n" +
+            "    $(\"#runForm input[name=predMax]\").val(y + %f);%n" +
+            "};", CLICK_RADIUS, CLICK_RADIUS, CLICK_RADIUS, CLICK_RADIUS);
 
     // COMMAND-LINE OPTIONS
 
@@ -125,9 +135,14 @@ public class ScatterProcessor extends WebProcessor {
         this.cMatrix = new int[][] { {0, 0}, {0, 0} };
         // Create the form.
         HtmlForm runForm = this.buildForm(this.getClass(), "rna", "scatter");
+        runForm.setId("runForm");
         // Create the scatter graph.
         this.graph = new ScatterGraph(1000, 800, "graph", 20, 20, 50, 100);
         this.graph.defineAxes("production", "predicted");
+        // Set the click event.
+        this.graph.setClickEvent("setBounds");
+        // Create the script for the click event.
+        DomContent scriptSection = script(rawHtml(SET_BOUNDS));
         // Create the HTML table.
         this.tabularReport = new HtmlTable<Key.RevFloat>(new ColSpec.Normal("Sample ID"), new ColSpec.Fraction("Production"),
                 new ColSpec.Fraction("Predicted"), new ColSpec.Fraction("Error"), new ColSpec.Num("Growth"));
@@ -188,7 +203,7 @@ public class ScatterProcessor extends WebProcessor {
             tableSection = this.tabularReport.output();
         // Now assemble all the sections.
         DomContent highlightBlock = this.getPageWriter().highlightBlock(runForm.output(),
-                matrixSection, graphSection, tableSection);
+                scriptSection, matrixSection, graphSection, tableSection);
         this.getPageWriter().writePage("Threonine Prediction Report", h1("Threonine Prediction Report and Graph"),
                 highlightBlock);
     }
