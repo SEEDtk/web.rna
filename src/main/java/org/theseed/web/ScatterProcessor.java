@@ -14,6 +14,7 @@ import org.theseed.reports.ColSpec;
 import org.theseed.reports.HtmlForm;
 import org.theseed.reports.HtmlTable;
 import org.theseed.reports.Key;
+import org.theseed.utils.IDescribable;
 import org.theseed.web.forms.FormElement;
 import org.theseed.web.graph.ScatterGraph;
 import org.theseed.web.rna.ScatterSort;
@@ -32,6 +33,7 @@ import static j2html.TagCreator.*;
  * The positional parameters are the name of the CoreSEED data directory and the name of the user's workspace.
  * The command-line options are as follows.
  *
+ * --source			type of the input file
  * --prodBound		cutoff value to be used for production axis in confusion matrix
  * --predBound		cutoff value to be used for prediction axis in confusion matrix
  * --prodMin		minimum production value to display in report
@@ -65,6 +67,10 @@ public class ScatterProcessor extends WebProcessor {
             "};", CLICK_RADIUS, CLICK_RADIUS, CLICK_RADIUS, CLICK_RADIUS);
 
     // COMMAND-LINE OPTIONS
+
+    @FormElement
+    @Option(name = "--source", usage = "input source to use")
+    protected InputTypes source;
 
     /** cutoff bound for production values */
     @FormElement
@@ -101,6 +107,39 @@ public class ScatterProcessor extends WebProcessor {
     @Option(name = "--sort", usage = "Order of tabular report")
     protected ScatterSort sortType;
 
+    /**
+     * enum for input file types, computes associated file name
+     */
+    public static enum InputTypes implements IDescribable {
+        NORMAL("All processed samples", "thr.predictions.tbl"),
+        ONLY24("Only 24-hour samples", "thr24.predictions.tbl"),
+        LOW("All samples, but trained on production < 1.3", "thrLow.predictions.tbl"),
+        SMALL("All samples, but trained on a random subset of 80%.", "thrSmall.predictions.tbl"),
+        HALF("All samples, but trained on a random subset of 50%.", "thrHalf.predictions.tbl"),
+        SMALL24("Only 24-hour samples, but trained on a random subset of 80%.", "thr24S.predictions.tbl");
+
+        private String description;
+        private String fileName;
+
+        private InputTypes(String desc, String fName) {
+            this.description = desc;
+            this.fileName = fName;
+        }
+
+        @Override
+        public String getDescription() {
+            return this.description;
+        }
+
+        /**
+         * @return the file name for this input type
+         */
+        public String getFileName() {
+            return this.fileName;
+        }
+
+    }
+
     @Override
     protected void setWebDefaults() {
         this.predBound = 1.0;
@@ -110,6 +149,7 @@ public class ScatterProcessor extends WebProcessor {
         this.prodMax = 0.0;
         this.prodMin = 0.0;
         this.sortType = ScatterSort.PRODUCTION;
+        this.source = InputTypes.NORMAL;
     }
 
     @Override
@@ -147,7 +187,7 @@ public class ScatterProcessor extends WebProcessor {
         this.tabularReport = new HtmlTable<Key.RevFloat>(new ColSpec.Normal("Sample ID"), new ColSpec.Fraction("Production"),
                 new ColSpec.Fraction("Predicted"), new ColSpec.Fraction("Error"), new ColSpec.Num("Growth"));
         // Now run through the input, building both the table and the graph.
-        File inFile = new File(this.getCoreDir(), "thr.predictions.tbl");
+        File inFile = new File(this.getCoreDir(), this.source.getFileName());
         try (TabbedLineReader inStream = new TabbedLineReader(inFile)) {
             int sampleCol = inStream.findField("sample_id");
             int prodCol = inStream.findField("production");
