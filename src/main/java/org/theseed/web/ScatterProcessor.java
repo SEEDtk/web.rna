@@ -111,22 +111,11 @@ public class ScatterProcessor extends WebProcessor {
      * enum for input file types, computes associated file name
      */
     public static enum InputTypes implements IDescribable {
-        NORMAL("All processed samples", "thr.predictions.tbl"),
-        ONLY24("Only 24-hour samples", "thr24.predictions.tbl"),
-        LOW("All samples, but trained on production < 1.3", "thrLow.predictions.tbl"),
-        SMALL("All samples, but trained on a random subset of 80%.", "thrSmall.predictions.tbl"),
-        HALF("All samples, but trained on a random subset of 50%.", "thrHalf.predictions.tbl"),
-        SMALL24("Only 24-hour samples, but trained on a random subset of 80%.", "thr24S.predictions.tbl"),
-        ONLY24LOW("Only 24-hour samples, but trained on production < 1.3.", "thr24L.predictions.tbl"),
-        ONLY24v2("Only 24-hour samples, cross-validate case 2", "thr24v2.predictions.tbl"),
-        ONLY24v3("Only 24-hour samples, cross-validate case 3", "thr24v3.predictions.tbl"),
-        ONLY24v4("Only 24-hour samples, cross-validate case 4", "thr24v4.predictions.tbl"),
-        ONLY24v5("Only 24-hour samples, cross-validate case 5", "thr24v5.predictions.tbl"),
-        ONLY24v6("Only 24-hour samples, cross-validate case 6", "thr24v6.predictions.tbl"),
-        ONLY24v7("Only 24-hour samples, cross-validate case 7", "thr24v7.predictions.tbl"),
-        ONLY24v8("Only 24-hour samples, cross-validate case 8", "thr24v8.predictions.tbl"),
-        ONLY24v9("Only 24-hour samples, cross-validate case 9", "thr24v9.predictions.tbl"),
-        ONLY24v10("Only 24-hour samples, cross-validate case 10", "thr24v10.predictions.tbl");
+        ALL("All processed samples", "thr.predictions.tbl"),
+        LOW("All samples, but trained on production <= 1.3", "thrl.predictions.tbl"),
+        HIGH("All samples, but trained on production > 0", "thrh.predictions.tbl"),
+        ALL24("Only 24-hour samples", "thr24.predictions.tbl"),
+        LOW24("Only 24-hour samples, but trained on production <= 1.3.", "thr24l.predictions.tbl");
 
         private String description;
         private String fileName;
@@ -159,7 +148,7 @@ public class ScatterProcessor extends WebProcessor {
         this.prodMax = 0.0;
         this.prodMin = 0.0;
         this.sortType = ScatterSort.PRODUCTION;
-        this.source = InputTypes.NORMAL;
+        this.source = InputTypes.ALL24;
     }
 
     @Override
@@ -202,7 +191,7 @@ public class ScatterProcessor extends WebProcessor {
             int sampleCol = inStream.findField("sample_id");
             int prodCol = inStream.findField("production");
             int growthCol = inStream.findField("density");
-            int predCol = inStream.findField("predicted");
+            int predCol = inStream.findField("o-production");
             log.info("Reading data points from {}.", inFile);
             for (TabbedLineReader.Line line : inStream) {
                 String sample = line.get(sampleCol);
