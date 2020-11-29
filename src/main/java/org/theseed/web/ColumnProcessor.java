@@ -23,6 +23,7 @@ import org.theseed.reports.HtmlForm;
 import org.theseed.reports.HtmlTable;
 import org.theseed.reports.Key;
 import org.theseed.rna.RnaData;
+import org.theseed.utils.ParseFailureException;
 import org.theseed.web.rna.ColumnDescriptor;
 import org.theseed.web.rna.NewColumnCreator;
 import org.theseed.web.rna.SimpleColumnDescriptor;
@@ -143,7 +144,7 @@ public class ColumnProcessor extends WebProcessor {
     }
 
     @Override
-    protected boolean validateWebParms() throws IOException {
+    protected boolean validateWebParms() throws IOException, ParseFailureException {
         // Read in the RNA data file.
         try {
             log.info("Loading RNA-seq data.");
@@ -155,9 +156,9 @@ public class ColumnProcessor extends WebProcessor {
         }
         // Verify the samples.
         if (! this.sample1.isEmpty() && this.data.getColIdx(this.sample1) < 0)
-            throw new IllegalArgumentException("Invalid sample name " + this.sample1 + ".");
+            throw new ParseFailureException("Invalid sample name " + this.sample1 + ".");
         if (! this.sample2.isEmpty() && this.data.getColIdx(this.sample2) < 0)
-            throw new IllegalArgumentException("Invalid sample name " + this.sample2 + ".");
+            throw new ParseFailureException("Invalid sample name " + this.sample2 + ".");
         return true;
     }
 
