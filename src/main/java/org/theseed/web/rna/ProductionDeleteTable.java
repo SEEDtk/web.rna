@@ -30,6 +30,8 @@ public class ProductionDeleteTable extends ProductionCompareTable {
      * @param protein	protein whose deletion is being monitored.
      */
     public ProductionDeleteTable(ProductionProcessor parent, String protein) {
+        // Save the sort column.
+        this.init(parent);
         // Create the output table.
         this.prodTable = new HtmlTable<Key.RevFloat>(new ColSpec.Normal("Sample Spec"), this.sortable(parent, 1, "keep " + protein),
                 this.sortable(parent, 2, "delete " + protein));
@@ -37,7 +39,6 @@ public class ProductionDeleteTable extends ProductionCompareTable {
         this.setup();
         // Save the protein name.
         this.protName = protein;
-
     }
 
     @Override
