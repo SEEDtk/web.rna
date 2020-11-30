@@ -8,10 +8,11 @@ import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.TextStringBuilder;
-import org.theseed.reports.Key;
 import org.theseed.reports.LinkObject;
 import org.theseed.rna.RnaData;
 import org.theseed.rna.RnaData.FeatureData;
+import org.theseed.web.Key;
+
 import j2html.tags.DomContent;
 
 /**

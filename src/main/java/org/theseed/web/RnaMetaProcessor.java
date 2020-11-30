@@ -6,9 +6,6 @@ package org.theseed.web;
 import java.io.File;
 import java.io.IOException;
 
-import org.theseed.reports.ColSpec;
-import org.theseed.reports.HtmlTable;
-import org.theseed.reports.Key;
 import org.theseed.rna.RnaData;
 
 import j2html.tags.DomContent;

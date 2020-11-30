@@ -4,6 +4,7 @@ import java.util.Arrays;
 
 import org.theseed.web.ColumnProcessor;
 import org.theseed.web.ColumnSaveProcessor;
+import org.theseed.web.ProductionProcessor;
 import org.theseed.web.RnaMetaProcessor;
 import org.theseed.web.ScatterProcessor;
 import org.theseed.web.WebProcessor;
@@ -41,6 +42,9 @@ public class App
             break;
         case "scatter" :
             processor = new ScatterProcessor();
+            break;
+        case "production" :
+            processor = new ProductionProcessor();
             break;
         default:
             throw new RuntimeException("Invalid command " + command);

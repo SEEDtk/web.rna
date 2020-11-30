@@ -4,9 +4,9 @@
 package org.theseed.web.rna;
 
 import org.apache.commons.lang3.StringUtils;
-import org.theseed.reports.Key;
 import org.theseed.rna.RnaData;
 import org.theseed.rna.RnaData.FeatureData;
+import org.theseed.web.Key;
 
 /**
  * This class contains a column that just displays the expression levels for a sample.

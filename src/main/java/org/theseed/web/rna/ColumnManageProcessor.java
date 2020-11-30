@@ -18,12 +18,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.theseed.reports.ColSpec;
-import org.theseed.reports.HtmlForm;
-import org.theseed.reports.HtmlTable;
-import org.theseed.reports.Key;
+import org.theseed.web.ColSpec;
 import org.theseed.web.ColumnProcessor;
 import org.theseed.web.CookieFile;
+import org.theseed.web.HtmlForm;
+import org.theseed.web.HtmlTable;
+import org.theseed.web.Key;
 import org.theseed.web.WebProcessor;
 
 import j2html.tags.ContainerTag;

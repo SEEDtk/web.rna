@@ -10,12 +10,8 @@ import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.theseed.io.TabbedLineReader;
-import org.theseed.reports.ColSpec;
-import org.theseed.reports.HtmlForm;
-import org.theseed.reports.HtmlTable;
-import org.theseed.reports.Key;
-import org.theseed.utils.IDescribable;
 import org.theseed.web.forms.FormElement;
+import org.theseed.web.forms.FormMapElement;
 import org.theseed.web.graph.ScatterGraph;
 import org.theseed.web.rna.ScatterSort;
 
@@ -68,9 +64,9 @@ public class ScatterProcessor extends WebProcessor {
 
     // COMMAND-LINE OPTIONS
 
-    @FormElement
+    @FormMapElement(file = "map.predictions.tbl")
     @Option(name = "--source", usage = "input source to use")
-    protected InputTypes source;
+    protected String source;
 
     /** cutoff bound for production values */
     @FormElement
@@ -107,37 +103,6 @@ public class ScatterProcessor extends WebProcessor {
     @Option(name = "--sort", usage = "Order of tabular report")
     protected ScatterSort sortType;
 
-    /**
-     * enum for input file types, computes associated file name
-     */
-    public static enum InputTypes implements IDescribable {
-        ALL("All processed samples", "thr.predictions.tbl"),
-        LOW("All samples, but trained on production <= 1.3", "thrl.predictions.tbl"),
-        HIGH("All samples, but trained on production > 0", "thrh.predictions.tbl"),
-        ALL24("Only 24-hour samples", "thr24.predictions.tbl"),
-        LOW24("Only 24-hour samples, but trained on production <= 1.3.", "thr24l.predictions.tbl");
-
-        private String description;
-        private String fileName;
-
-        private InputTypes(String desc, String fName) {
-            this.description = desc;
-            this.fileName = fName;
-        }
-
-        @Override
-        public String getDescription() {
-            return this.description;
-        }
-
-        /**
-         * @return the file name for this input type
-         */
-        public String getFileName() {
-            return this.fileName;
-        }
-
-    }
 
     @Override
     protected void setWebDefaults() {
@@ -148,7 +113,7 @@ public class ScatterProcessor extends WebProcessor {
         this.prodMax = 0.0;
         this.prodMin = 0.0;
         this.sortType = ScatterSort.PRODUCTION;
-        this.source = InputTypes.ALL24;
+        this.source = "thr24.predictions.tbl";
     }
 
     @Override
@@ -186,7 +151,7 @@ public class ScatterProcessor extends WebProcessor {
         this.tabularReport = new HtmlTable<Key.RevFloat>(new ColSpec.Normal("Sample ID"), new ColSpec.Fraction("Production"),
                 new ColSpec.Fraction("Predicted"), new ColSpec.Fraction("Error"), new ColSpec.Num("Growth"));
         // Now run through the input, building both the table and the graph.
-        File inFile = new File(this.getCoreDir(), this.source.getFileName());
+        File inFile = new File(this.getCoreDir(), this.source);
         try (TabbedLineReader inStream = new TabbedLineReader(inFile)) {
             int sampleCol = inStream.findField("sample_id");
             int prodCol = inStream.findField("production");
