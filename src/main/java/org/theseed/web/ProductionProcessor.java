@@ -200,6 +200,7 @@ public class ProductionProcessor extends WebProcessor {
             cookies.put("minPred", this.minPred);
             cookies.put("maxPred", this.maxPred);
             cookies.put("compare", this.compare);
+            cookies.flush();
         }
         // Compute the type of output table from the comparison string.
         int compareIdx = ArrayUtils.indexOf(FRAGMENT_TITLES, this.compare);
@@ -220,7 +221,8 @@ public class ProductionProcessor extends WebProcessor {
             int growthCol = prodStream.findField("density");
             for (TabbedLineReader.Line line : prodStream) {
                 // Determine the current sample.
-                SampleId sample = new SampleId(line.get(sampleCol));
+                String sampleId = line.get(sampleCol);
+                SampleId sample = new SampleId(sampleId);
                 // Update the choice lists and determine if we are keeping this sample.
                 boolean keep = true;
                 for (int i = 0; i < FRAGMENT_TITLES.length; i++) {
@@ -235,9 +237,10 @@ public class ProductionProcessor extends WebProcessor {
                         Set<String> deletes = sample.getDeletes();
                         Collection<String> filter = this.filters.get(SampleId.DELETE_COL);
                         this.choices.get(SampleId.DELETE_COL).addAll(deletes);
-                        if (deletes.isEmpty() && ! filter.contains("000"))
-                            keep = false;
-                        else if (filter.stream().allMatch(x -> ! deletes.contains(x)))
+                        if (deletes.isEmpty()) {
+                            if (! filter.contains("000"))
+                                keep = false;
+                        } else if (filter.stream().allMatch(x -> ! deletes.contains(x)))
                             keep = false;
                     }
                 }
