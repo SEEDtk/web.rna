@@ -222,7 +222,7 @@ public class ColumnProcessor extends WebProcessor {
                 // Get the sort key for this row.
                 Key.RevRatio rowKey = columns[this.sortCol].getKey(feat);
                 // Create the row.
-                HtmlTable<Key.RevRatio>.Row tableRow = table.new Row(rowKey);
+                Row<Key.RevRatio> tableRow = new Row<Key.RevRatio>(table, rowKey);
                 tableRow.add(0);
                 tableRow.add(ColumnDescriptor.fidLink(feat.getId()));
                 tableRow.add(feat.getGene());
@@ -367,7 +367,7 @@ public class ColumnProcessor extends WebProcessor {
                 Object[] checkboxes = filterSets.get(i).stream().map(x -> CoreHtmlUtilities.checkBox(x, x, true, onclick))
                         .toArray();
                 DomContent checks = div(join(checkboxes)).withId(String.format(SELECTOR_FORMAT, i));
-                retVal.new Row(Key.NONE).add(CHECK_COLUMNS[i]).add(checks);
+                new Row<Key.Null>(retVal, Key.NONE).add(CHECK_COLUMNS[i]).add(checks);
             }
         }
         return retVal;

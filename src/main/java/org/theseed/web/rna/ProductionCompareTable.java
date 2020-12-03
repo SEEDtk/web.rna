@@ -4,19 +4,21 @@
 package org.theseed.web.rna;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.theseed.counters.BestColumn;
 import org.theseed.proteins.SampleId;
 import org.theseed.reports.CoreHtmlUtilities;
 import org.theseed.web.ColSpec;
 import org.theseed.web.HtmlTable;
 import org.theseed.web.Key;
 import org.theseed.web.ProductionProcessor;
+import org.theseed.web.Row;
 import org.theseed.web.WebProcessor;
-
 import j2html.tags.DomContent;
 import static j2html.TagCreator.*;
 
@@ -33,13 +35,17 @@ public class ProductionCompareTable implements IProductionTable {
     /** table being built */
     protected HtmlTable<Key.RevFloat> prodTable;
     /** map of sample strings to table rows */
-    protected Map<String, HtmlTable<Key.RevFloat>.Row> rowMap;
+    protected Map<String, Row<Key.RevFloat>> rowMap;
     /** sort column for table */
     protected int sortCol;
     /** index of the fragment being compared */
     private int fragIdx;
     /** original choice list, used to compute column indices */
     private List<String> choiceList;
+    /** map used to track maximum value for each row */
+    private Map<String, BestColumn> maxMap;
+    /** title of each data column */
+    private String[] colTitles;
     /** dummy key for each row */
     private static final Key.RevFloat DUMMY_KEY = new Key.RevFloat(Double.NEGATIVE_INFINITY);
 
@@ -51,17 +57,8 @@ public class ProductionCompareTable implements IProductionTable {
      * @param choices		list of choices being compared
      */
     public ProductionCompareTable(ProductionProcessor parent, int compareIdx, Collection<String> choices) {
-        // Create the table.
-        ColSpec[] columns = new ColSpec[choices.size() + 1];
-        columns[0] = new ColSpec.Normal("Sample Spec");
-        int i = 1;
-        for (String choice : choices) {
-            columns[i] = this.sortable(parent, i, choice);
-            i++;
-        }
-        this.prodTable = new HtmlTable<Key.RevFloat>(columns);
-        // Initialize the other structures.
-        this.setup();
+        // Initialize the data structures.
+        this.setup(parent, choices);
         // Create the list used to determine which column contains each choice.
         this.choiceList = new ArrayList<String>(choices.size() + 1);
         this.choiceList.add("");
@@ -74,9 +71,25 @@ public class ProductionCompareTable implements IProductionTable {
 
     /**
      * Initialize the common data structures.
+     *
+     * @param parent	parent command processor
+     * @param colNames	names of the data columns
      */
-    protected void setup() {
-        this.rowMap = new HashMap<String, HtmlTable<Key.RevFloat>.Row>(1000);
+    protected void setup(ProductionProcessor parent, Collection<String> colNames) {
+        // Create the row-based maps.
+        this.rowMap = new HashMap<String, Row<Key.RevFloat>>(1000);
+        this.maxMap = new HashMap<String, BestColumn>(1000);
+        // Create the table and save the column names.
+        ColSpec[] columns = new ColSpec[colNames.size() + 1];
+        columns[0] = new ColSpec.Normal("Sample Spec");
+        this.colTitles = new String[colNames.size() + 1];
+        int i = 1;
+        for (String colName : colNames) {
+            columns[i] = this.sortable(parent, i, colName);
+            this.colTitles[i] = colName;
+            i++;
+        }
+        this.prodTable = new HtmlTable<Key.RevFloat>(columns);
     }
 
     /**
@@ -129,20 +142,47 @@ public class ProductionCompareTable implements IProductionTable {
      */
     protected void store(String spec, int colIdx, double production, double actual,
             double growth) {
-        HtmlTable<Key.RevFloat>.Row row = this.rowMap.computeIfAbsent(spec, x -> (this.prodTable.new Row(DUMMY_KEY).add(spec)));
+        Row<Key.RevFloat> row = this.rowMap.computeIfAbsent(spec, x -> (new Row<Key.RevFloat>(this.prodTable, DUMMY_KEY).add(spec)));
         DomContent prodHtml = text(String.format("%11.6f", production));
         if (! Double.isNaN(actual)) {
             prodHtml = CoreHtmlUtilities.toolTip(prodHtml, String.format("actual = %g, growth = %g", actual, growth));
             row.highlight(colIdx);
         }
+        // Store the value in the column.
         row.store(colIdx, prodHtml);
+        // Insure the correct key is in place.
         if (colIdx == this.sortCol)
             this.prodTable.moveRow(row, new Key.RevFloat(production));
+        // Update the best-column information.
+        BestColumn tracker = this.maxMap.computeIfAbsent(spec, x -> new BestColumn());
+        tracker.merge(colIdx, production);
     }
 
     @Override
     public HtmlTable<? extends Key> closeTable() {
         return this.prodTable;
+    }
+
+    @Override
+    public DomContent getSummary() {
+        // Here we want to know how often each column had the highest value.
+        int[] counters = new int[this.colTitles.length];
+        Arrays.fill(counters, 0);
+        for (BestColumn best : this.maxMap.values())
+            counters[best.getBestIdx()]++;
+        // Create a table to output the counts.
+        ColSpec[] columns = new ColSpec[counters.length];
+        columns[0] = new ColSpec.Normal("");
+        for (int i = 1; i < columns.length; i++)
+            columns[i] = new ColSpec.Num(this.colTitles[i]);
+        HtmlTable<Key.Null> maxTable = new HtmlTable<Key.Null>(columns);
+        Row<Key.Null> row = new Row<Key.Null>(maxTable, Key.NONE);
+        // Fill in the heading and the counts.
+        row.add("Number of times column had maximum value.");
+        for (int i = 1; i < counters.length; i++)
+            row.add(counters[i]);
+        // Return the table.
+        return maxTable.output();
     }
 
 }

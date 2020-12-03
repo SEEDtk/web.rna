@@ -46,6 +46,9 @@ public class App
         case "production" :
             processor = new ProductionProcessor();
             break;
+        case "predManage" :
+            processor = new ProductionManageProcessor();
+            break;
         default:
             throw new RuntimeException("Invalid command " + command);
         }

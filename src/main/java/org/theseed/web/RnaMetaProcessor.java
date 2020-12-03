@@ -47,7 +47,7 @@ public class RnaMetaProcessor extends WebProcessor {
                 new ColSpec.Num("OD"), new ColSpec.Normal("original_name"));
         // Run through the samples, adding rows.
         for (RnaData.JobData sample : data.getSamples()) {
-            table.new Row(Key.NONE).add(sample.getName()).add(sample.getProduction())
+            new Row<Key.Null>(table, Key.NONE).add(sample.getName()).add(sample.getProduction())
                     .add(sample.getOpticalDensity()).add(sample.getOldName());
         }
         DomContent tableHtml = this.getPageWriter().highlightBlock(table.output());

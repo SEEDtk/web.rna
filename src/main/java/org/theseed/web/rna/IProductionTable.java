@@ -7,6 +7,8 @@ import org.theseed.proteins.SampleId;
 import org.theseed.web.HtmlTable;
 import org.theseed.web.Key;
 
+import j2html.tags.DomContent;
+
 /**
  * This interface is used for operations that create a table of sample production data.
  *
@@ -29,4 +31,9 @@ public interface IProductionTable {
      * @return the table produced
      */
     HtmlTable<? extends Key> closeTable();
+
+    /**
+     * @return a summary paragraph
+     */
+    DomContent getSummary();
 }

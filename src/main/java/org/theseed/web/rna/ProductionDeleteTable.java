@@ -3,12 +3,10 @@
  */
 package org.theseed.web.rna;
 
+import java.util.Arrays;
 import java.util.Set;
 
 import org.theseed.proteins.SampleId;
-import org.theseed.web.ColSpec;
-import org.theseed.web.HtmlTable;
-import org.theseed.web.Key;
 import org.theseed.web.ProductionProcessor;
 
 /**
@@ -32,11 +30,8 @@ public class ProductionDeleteTable extends ProductionCompareTable {
     public ProductionDeleteTable(ProductionProcessor parent, String protein) {
         // Save the sort column.
         this.init(parent);
-        // Create the output table.
-        this.prodTable = new HtmlTable<Key.RevFloat>(new ColSpec.Normal("Sample Spec"), this.sortable(parent, 1, "keep " + protein),
-                this.sortable(parent, 2, "delete " + protein));
-        // Create the row map.
-        this.setup();
+        // Create the row maps and the main table.
+        this.setup(parent, Arrays.asList("keep " + protein, "delete " + protein));
         // Save the protein name.
         this.protName = protein;
     }

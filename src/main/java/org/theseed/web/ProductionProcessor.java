@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -62,7 +63,8 @@ import static j2html.TagCreator.*;
  * --minPred	minimum predicted value to display
  * --maxPred	maximum predicted value to display
  * --compare	fragment for comparison
- * --saved		used saved parameter values for filters (no filters may be specified)
+ * --saved		name of a configuration (or 1 for default): use saved parameter values for filters (no filters may be specified)
+ * --store		name of a configuration in which to store the current one
  *
  * @author Bruce Parrello
  *
@@ -79,9 +81,15 @@ public class ProductionProcessor extends WebProcessor {
     /** titles of fragments */
     private static final String[] FRAGMENT_TITLES = new String[] { "host", "del", "operon", "loc", "asd", "insert", "delete", "iptg" };
     /** names of fragment parameters (currently the same as the titles) */
-    private static final String[] FRAGMENT_NAMES = FRAGMENT_TITLES;
+    public static final String[] FRAGMENT_NAMES = FRAGMENT_TITLES;
+    /** prefix for configuration cookie file names */
+    public static final String RNA_PRODUCTION = "rna.production.";
+    /** pattern for configuration file names */
+    public static final Pattern RNA_PRODUCTION_CONFIG = Pattern.compile("_rna\\.production\\.([^\\.]+)\\.cookie\\.tbl");
     /** production table builder */
     private IProductionTable tableBuilder;
+    /** configuration message */
+    private String configMessage;
 
     // COMMAND-LINE OPTIONS
 
@@ -135,7 +143,10 @@ public class ProductionProcessor extends WebProcessor {
 
     /** used saved parameter values */
     @Option(name = "--saved", usage = "use parameter values from cookie string")
-    protected int restoreFilters;
+    protected String restoreFilters;
+
+    @Option(name = "--store", usage = "cookie file in which to store configuration")
+    protected String storeConfig;
 
     /** column to sort on */
     @Option(name = "--sortCol", usage = "index of column to sort on")
@@ -155,8 +166,9 @@ public class ProductionProcessor extends WebProcessor {
         this.minPred = 0.0;
         this.maxPred = 5.0;
         this.compare = "(none)";
-        this.restoreFilters = 0;
+        this.restoreFilters = null;
         this.sortCol = 1;
+        this.storeConfig = null;
     }
 
     @Override
@@ -178,19 +190,7 @@ public class ProductionProcessor extends WebProcessor {
     @Override
     protected void runWebCommand(CookieFile cookies) throws Exception {
         // Save and/or restore the form data.
-        if (this.restoreFilters == 1) {
-            // Here we have to restore the old form data.
-            for (int i = 0; i < FRAGMENT_NAMES.length; i++) {
-                Collection<String> filter = this.filters.get(i);
-                filter.clear();
-                List<String> restored = Arrays.asList(StringUtils.split(cookies.get(FRAGMENT_NAMES[i], ""), ','));
-                filter.addAll(restored);
-            }
-            this.realOnly = cookies.get("realOnly", false);
-            this.minPred = cookies.get("minPred", 0.0);
-            this.maxPred = cookies.get("maxPred", 5.0);
-            this.compare = cookies.get("compare", "(none)");
-        } else {
+        if (this.restoreFilters == null) {
             // Here we have to save the new form data.
             for (int i = 0; i < FRAGMENT_NAMES.length; i++) {
                 Collection<String> filter = this.filters.get(i);
@@ -201,6 +201,26 @@ public class ProductionProcessor extends WebProcessor {
             cookies.put("maxPred", this.maxPred);
             cookies.put("compare", this.compare);
             cookies.flush();
+            if (this.storeConfig == null) {
+                this.configMessage = "Default configuration in use.";
+            } else if (badConfigName(this.storeConfig)) {
+                this.configMessage = "Invalid characters in configuration name.  Configuration not saved.";
+            } else {
+                // Here we want to save the configuration.
+                File saveName = CookieFile.computeFile(this.getWorkSpaceDir(), getConfigName(this.storeConfig));
+                cookies.flush(saveName);
+                this.configMessage = "Configuration saved to " + this.storeConfig + ".";
+            }
+        } else if (this.restoreFilters.contentEquals("1")) {
+            // Here we have to restore the old form data.
+            restoreParmsFromCookieFile(cookies);
+            this.configMessage = "Configuration restored from saved default.";
+        } else {
+            // Here we have to restore the old form data from an alternate cookie file.
+            CookieFile otherCookies = new CookieFile(this.getWorkSpaceDir(), getConfigName(this.restoreFilters));
+            restoreParmsFromCookieFile(otherCookies);
+            cookies.flush();
+            this.configMessage = "Configuration restored from \"" + this.restoreFilters + "\".";
         }
         // Compute the type of output table from the comparison string.
         int compareIdx = ArrayUtils.indexOf(FRAGMENT_TITLES, this.compare);
@@ -266,15 +286,55 @@ public class ProductionProcessor extends WebProcessor {
         // Get the display table.
         HtmlTable<? extends Key> prodTable = this.tableBuilder.closeTable();
         DomContent outputTable;
-        if (prodTable.getHeight() == 0)
-            outputTable = p("No samples to display.");
-        else
+        DomContent summary;
+        if (prodTable.getHeight() == 0) {
+            summary = p("No samples to display.");
+            outputTable = p("");
+        } else {
+            summary = this.tableBuilder.getSummary();
             outputTable = prodTable.output();
+        }
         // Build the form for the next time.
         DomContent submitForm = this.createForm();
         // Write the web page.
-        DomContent highlightBlock = this.getPageWriter().highlightBlock(submitForm, outputTable);
+        DomContent highlightBlock = this.getPageWriter().highlightBlock(submitForm, summary, outputTable);
         this.getPageWriter().writePage("Threonine Production Predictions", text("Threonine Production Predictions"), highlightBlock);
+    }
+
+    /**
+     * @return the cookie file name for a configuration
+     *
+     * @param configName	configuration name whose file is desired
+     */
+    public static String getConfigName(String configName) {
+        return RNA_PRODUCTION + configName;
+    }
+
+    /**
+     * @return TRUE if the specified configuration name is invalid
+     *
+     * @param configName	configuration name to validate
+     */
+    public static boolean badConfigName(String configName) {
+        return StringUtils.containsAny(configName, " \\//.,?*&<>|");
+    }
+
+    /**
+     * Restore all the parameters from a cookie file.
+     *
+     * @param cookies	source cookie file to restore
+     */
+    protected void restoreParmsFromCookieFile(CookieFile cookies) {
+        for (int i = 0; i < FRAGMENT_NAMES.length; i++) {
+            Collection<String> filter = this.filters.get(i);
+            filter.clear();
+            List<String> restored = Arrays.asList(StringUtils.split(cookies.get(FRAGMENT_NAMES[i], ""), ','));
+            filter.addAll(restored);
+        }
+        this.realOnly = cookies.get("realOnly", false);
+        this.minPred = cookies.get("minPred", 0.0);
+        this.maxPred = cookies.get("maxPred", 5.0);
+        this.compare = cookies.get("compare", "(none)");
     }
 
     /**
@@ -300,6 +360,10 @@ public class ProductionProcessor extends WebProcessor {
         }
         comparisons.addAll(this.choices.get(SampleId.DELETE_COL).stream().map(x -> "D" + x).collect(Collectors.toList()));
         retVal.addChoiceRow("compare", "Comparison Attribute", this.compare, comparisons);
+        // Add the configuration status message.
+        retVal.addMessageRow(p(join(this.configMessage, this.commandLink("Manage configurations", "rna", "predManage"))));
+        // Add the save options.
+        retVal.addTextRow("store", "Save this configuration", "");
         return retVal.output();
     }
 

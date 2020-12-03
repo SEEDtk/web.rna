@@ -5,11 +5,15 @@ package org.theseed.web;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.theseed.counters.RegressionStatistics;
 import org.theseed.io.TabbedLineReader;
+import org.theseed.reports.Color;
 import org.theseed.web.forms.FormElement;
 import org.theseed.web.forms.FormMapElement;
 import org.theseed.web.graph.ScatterGraph;
@@ -29,7 +33,7 @@ import static j2html.TagCreator.*;
  * The positional parameters are the name of the CoreSEED data directory and the name of the user's workspace.
  * The command-line options are as follows.
  *
- * --source			type of the input file
+ * --source			name of the input file
  * --prodBound		cutoff value to be used for production axis in confusion matrix
  * --predBound		cutoff value to be used for prediction axis in confusion matrix
  * --prodMin		minimum production value to display in report
@@ -51,6 +55,24 @@ public class ScatterProcessor extends WebProcessor {
     private int[][] cMatrix;
     /** tabular report */
     private HtmlTable<Key.RevFloat> tabularReport;
+    /** index of sample ID column in input */
+    private int sampleCol;
+    /** index of production column in input */
+    private int prodCol;
+    /** index of prediction column in input */
+    private int predCol;
+    /** index of growth column in input */
+    private int growthCol;
+    /** testing error message */
+    private String testingError;
+    /** training error message */
+    private String trainingError;
+    /** error statistics */
+    private RegressionStatistics errorTracker;
+    /** color for normal points */
+    private static final Color normalColor = Color.BLUE;
+    /** color for testing set points */
+    private static final Color testColor = Color.RED;
     /** buffer size around dot for click event */
     private static final double CLICK_RADIUS = 0.2;
     /** function body for click event */
@@ -150,34 +172,40 @@ public class ScatterProcessor extends WebProcessor {
         // Create the HTML table.
         this.tabularReport = new HtmlTable<Key.RevFloat>(new ColSpec.Normal("Sample ID"), new ColSpec.Fraction("Production"),
                 new ColSpec.Fraction("Predicted"), new ColSpec.Fraction("Error"), new ColSpec.Num("Growth"));
-        // Now run through the input, building both the table and the graph.
+        // Initialize the graph color.
+        this.graph.setColor(normalColor);
+        // This list will hold the lines from the testing set.
+        List<TabbedLineReader.Line> testingLines = new ArrayList<TabbedLineReader.Line>(500);
+        // Initialize the error tracker.
+        this.errorTracker = new RegressionStatistics(2000);
+        // Now run through the input, building both the table and the graph.  We do this in two passes.
+        // The first pass plots the training set.
         File inFile = new File(this.getCoreDir(), this.source);
         try (TabbedLineReader inStream = new TabbedLineReader(inFile)) {
-            int sampleCol = inStream.findField("sample_id");
-            int prodCol = inStream.findField("production");
-            int growthCol = inStream.findField("density");
-            int predCol = inStream.findField("o-production");
+            this.sampleCol = inStream.findField("sample_id");
+            this.prodCol = inStream.findField("production");
+            this.growthCol = inStream.findField("density");
+            this.predCol = inStream.findField("o-production");
+            int flagCol = inStream.findField("trained");
             log.info("Reading data points from {}.", inFile);
             for (TabbedLineReader.Line line : inStream) {
-                String sample = line.get(sampleCol);
-                double prod = line.getDouble(prodCol);
-                double pred = line.getDouble(predCol);
-                double growth = line.getDouble(growthCol);
-                // Add this point to the graph.
-                this.graph.add(sample, prod, pred);
-                // Count it in the confusion matrix.
-                int predIdx = (pred >= this.predBound ? 1 : 0);
-                int prodIdx = (prod >= this.prodBound ? 1 : 0);
-                this.cMatrix[prodIdx][predIdx]++;
-                // If it is in range, put it in the table.
-                if (pred >= this.predMin && pred <= this.predMax && prod >= this.prodMin && prod <= this.prodMax) {
-                    Key.RevFloat key = new Key.RevFloat(this.sortType.sortValue(prod, pred));
-                    this.tabularReport.new Row(key).add(sample).add(prod)
-                            .add(pred).add(pred - prod).add(growth);
-                }
+                boolean trainingSet = line.getFlag(flagCol);
+                if (! trainingSet)
+                    testingLines.add(line);
+                else
+                    processLine(line);
             }
-            log.info("{} points added to graph, {} to tabular report.", this.graph.size(), this.tabularReport.getHeight());
         }
+        // Save the training error.
+        this.trainingError = this.getErrorDescription("Training");
+        // The second pass plots the testing set.  This is a different color, and we do it last so the points are more
+        // visible.  We must also restart the error tracker.
+        this.errorTracker = new RegressionStatistics(200);
+        this.graph.setColor(testColor);
+        for (TabbedLineReader.Line line : testingLines)
+            processLine(line);
+        log.info("{} points added to graph, {} to tabular report.", this.graph.size(), this.tabularReport.getHeight());
+        this.testingError = this.getErrorDescription("Testing");
         // We will build the output sections in here.
         DomContent matrixSection;
         DomContent graphSection;
@@ -192,7 +220,9 @@ public class ScatterProcessor extends WebProcessor {
             matrixSection = ul(
                     li(String.format("Accuracy is %4.2f%%.", (this.cMatrix[0][0] + this.cMatrix[1][1]) * 100.0 / points)),
                     li(String.format("False negatives are %4.2f%%.", this.cMatrix[1][0] * 100.0 / points)),
-                    li(String.format("False positives are %4.2f%%.", this.cMatrix[0][1] * 100.0 / points))
+                    li(String.format("False positives are %4.2f%%.", this.cMatrix[0][1] * 100.0 / points)),
+                    li(this.trainingError),
+                    li(this.testingError)
                     );
             // Now we output the scatter graph.
             this.graph.plot();
@@ -210,6 +240,43 @@ public class ScatterProcessor extends WebProcessor {
                 scriptSection, matrixSection, graphSection, tableSection);
         this.getPageWriter().writePage("Threonine Prediction Report", h1("Threonine Prediction Report and Graph"),
                 highlightBlock);
+    }
+
+    /**
+     * @return a string describing the error statistics for a set
+     *
+     * @param string	name of the set (testing or training)
+     */
+    private String getErrorDescription(String string) {
+        this.errorTracker.finish();
+        return String.format("%s set error IQR (scaled to range):  %g, %g to %g.", string, this.errorTracker.iqr(),
+                this.errorTracker.getQ1(), this.errorTracker.getQ3());
+    }
+
+    /**
+     * Process a line of data.
+     *
+     * @param line	input line from the data file
+     */
+    protected void processLine(TabbedLineReader.Line line) {
+        String sample = line.get(sampleCol);
+        double prod = line.getDouble(prodCol);
+        double pred = line.getDouble(predCol);
+        double growth = line.getDouble(growthCol);
+        // Add this point to the graph.
+        this.graph.add(sample, prod, pred);
+        // Count it in the confusion matrix.
+        int predIdx = (pred >= this.predBound ? 1 : 0);
+        int prodIdx = (prod >= this.prodBound ? 1 : 0);
+        this.cMatrix[prodIdx][predIdx]++;
+        // Record the error.
+        this.errorTracker.add(prod, pred);
+        // If it is in range, put it in the table.
+        if (pred >= this.predMin && pred <= this.predMax && prod >= this.prodMin && prod <= this.prodMax) {
+            Key.RevFloat key = new Key.RevFloat(this.sortType.sortValue(prod, pred));
+            new Row<Key.RevFloat>(this.tabularReport, key).add(sample).add(prod)
+                    .add(pred).add(pred - prod).add(growth);
+        }
     }
 
 }
