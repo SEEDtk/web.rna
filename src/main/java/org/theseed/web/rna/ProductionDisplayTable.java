@@ -10,6 +10,7 @@ import org.theseed.web.ColSpec;
 import org.theseed.web.HtmlTable;
 import org.theseed.web.Key;
 import org.theseed.web.Row;
+import org.theseed.web.WebProcessor;
 
 import j2html.tags.DomContent;
 
@@ -26,17 +27,23 @@ public class ProductionDisplayTable implements IProductionTable {
     private HtmlTable<Key.RevFloat> table;
     /** prediction/actual error tracker */
     private SummaryStatistics tracker;
+    /** web processor for generating links */
+    private WebProcessor processor;
 
-    public ProductionDisplayTable() {
+    public ProductionDisplayTable(WebProcessor processor) {
         this.table = new HtmlTable<Key.RevFloat>(new ColSpec.Normal("Sample"), new ColSpec.Fraction("Predicted"),
                 new ColSpec.Fraction("Actual"), new ColSpec.Fraction("Growth"));
         this.tracker = new SummaryStatistics();
+        this.processor = processor;
     }
 
     @Override
     public void recordSample(SampleId sample, double production, double actual, double growth) {
+        String sampleName = sample.toString();
+        DomContent sampleLink = this.processor.commandLink(sampleName, "rna", "sample", "sample=" + sampleName)
+                .withTarget("_blank");
         Row<Key.RevFloat> row = new Row<Key.RevFloat>(this.table, new Key.RevFloat(production))
-                .add(sample.toString()).addKey();
+                .add(sampleLink).addKey();
         if (Double.isNaN(actual))
             row.add("").add("");
         else {

@@ -229,7 +229,7 @@ public class ProductionProcessor extends WebProcessor {
         else if (this.compare.charAt(0) == 'D')
             this.tableBuilder = new ProductionDeleteTable(this, this.compare.substring(1));
         else
-            this.tableBuilder = new ProductionDisplayTable();
+            this.tableBuilder = new ProductionDisplayTable(this);
         // Insure delete-nothing is a choice for the delete column.
         this.choices.get(SampleId.DELETE_COL).add("000");
         // Read the production file.

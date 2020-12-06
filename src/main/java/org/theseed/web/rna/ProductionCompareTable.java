@@ -19,6 +19,8 @@ import org.theseed.web.Key;
 import org.theseed.web.ProductionProcessor;
 import org.theseed.web.Row;
 import org.theseed.web.WebProcessor;
+
+import j2html.tags.ContainerTag;
 import j2html.tags.DomContent;
 import static j2html.TagCreator.*;
 
@@ -46,6 +48,8 @@ public class ProductionCompareTable implements IProductionTable {
     private Map<String, BestColumn> maxMap;
     /** title of each data column */
     private String[] colTitles;
+    /** web processor for computing links */
+    private WebProcessor processor;
     /** dummy key for each row */
     private static final Key.RevFloat DUMMY_KEY = new Key.RevFloat(Double.NEGATIVE_INFINITY);
 
@@ -90,6 +94,7 @@ public class ProductionCompareTable implements IProductionTable {
             i++;
         }
         this.prodTable = new HtmlTable<Key.RevFloat>(columns);
+        this.processor = parent;
     }
 
     /**
@@ -127,7 +132,7 @@ public class ProductionCompareTable implements IProductionTable {
         int colIdx = this.choiceList.indexOf(sample.getFragment(this.fragIdx));
         if (colIdx >= 1) {
             // We found the column, so store the cell in the sample's row.
-            this.store(sampleName, colIdx, production, actual, growth);
+            this.store(sampleName, sampleName, colIdx, production, actual, growth);
         }
     }
 
@@ -135,14 +140,16 @@ public class ProductionCompareTable implements IProductionTable {
      * Store production information into a cell of a production comparison table.
      *
      * @param spec			specification for the sample of interest
+     * @param pattern		pattern to use for the sample link
      * @param colIdx		index of the target column
      * @param production	predicted production value
      * @param actual		actual production value (if any)
      * @param growth		growth (if any)
      */
-    protected void store(String spec, int colIdx, double production, double actual,
+    protected void store(String spec, String pattern, int colIdx, double production, double actual,
             double growth) {
-        Row<Key.RevFloat> row = this.rowMap.computeIfAbsent(spec, x -> (new Row<Key.RevFloat>(this.prodTable, DUMMY_KEY).add(spec)));
+        DomContent html = this.getSampleLink(spec, pattern);
+        Row<Key.RevFloat> row = this.rowMap.computeIfAbsent(spec, x -> (new Row<Key.RevFloat>(this.prodTable, DUMMY_KEY).add(html)));
         DomContent prodHtml = text(String.format("%11.6f", production));
         if (! Double.isNaN(actual)) {
             prodHtml = CoreHtmlUtilities.toolTip(prodHtml, String.format("actual = %g, growth = %g", actual, growth));
@@ -183,6 +190,16 @@ public class ProductionCompareTable implements IProductionTable {
             row.add(counters[i]);
         // Return the table.
         return maxTable.output();
+    }
+
+    /**
+     * @return a link to the web page for displaying the specified sample's information
+     *
+     * @param text		display text for the sample ID
+     * @param sampleId	ID of the target sample
+     */
+    protected ContainerTag getSampleLink(String text, String sampleId) {
+        return this.processor.commandLink(text, "rna", "sample", "sample=" + sampleId).withTarget("_blank");
     }
 
 }

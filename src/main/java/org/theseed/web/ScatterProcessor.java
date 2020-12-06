@@ -273,8 +273,12 @@ public class ScatterProcessor extends WebProcessor {
         this.errorTracker.add(prod, pred);
         // If it is in range, put it in the table.
         if (pred >= this.predMin && pred <= this.predMax && prod >= this.prodMin && prod <= this.prodMax) {
+            // Compute the sort key.
             Key.RevFloat key = new Key.RevFloat(this.sortType.sortValue(prod, pred));
-            new Row<Key.RevFloat>(this.tabularReport, key).add(sample).add(prod)
+            // Compute the sample ID link.
+            DomContent sampleLink = this.commandLink(sample, "rna", "sample", "sample=" + sample).withTarget("_blank");
+            // Create the row.
+            new Row<Key.RevFloat>(this.tabularReport, key).add(sampleLink).add(prod)
                     .add(pred).add(pred - prod).add(growth);
         }
     }

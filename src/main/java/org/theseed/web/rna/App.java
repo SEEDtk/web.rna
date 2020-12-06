@@ -6,6 +6,7 @@ import org.theseed.web.ColumnProcessor;
 import org.theseed.web.ColumnSaveProcessor;
 import org.theseed.web.ProductionProcessor;
 import org.theseed.web.RnaMetaProcessor;
+import org.theseed.web.SampleDisplayProcessor;
 import org.theseed.web.ScatterProcessor;
 import org.theseed.web.WebProcessor;
 
@@ -16,6 +17,9 @@ import org.theseed.web.WebProcessor;
  * meta			show metadata for samples
  * saveCols		save the current column configuration under a new name
  * manage		manage saved column specifications
+ * scatter		display predictions vs actual on a graph
+ * production	display predictions for virtual and real samples
+ * sample		display details for one or more samples
  *
  */
 public class App
@@ -48,6 +52,9 @@ public class App
             break;
         case "predManage" :
             processor = new ProductionManageProcessor();
+            break;
+        case "sample" :
+            processor = new SampleDisplayProcessor();
             break;
         default:
             throw new RuntimeException("Invalid command " + command);
