@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -19,9 +20,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.theseed.reports.CoreHtmlUtilities;
 import org.theseed.rna.RnaData;
+import org.theseed.utils.FloatList;
 import org.theseed.utils.ParseFailureException;
+import org.theseed.web.rna.CellDescriptor;
 import org.theseed.web.rna.ColumnDescriptor;
+import org.theseed.web.rna.ColumnQualifierType;
 import org.theseed.web.rna.NewColumnCreator;
+import org.theseed.web.rna.RowFilter;
 import org.theseed.web.rna.SimpleColumnDescriptor;
 
 import j2html.tags.ContainerTag;
@@ -59,6 +64,9 @@ import static j2html.TagCreator.*;
  * --name		name of the column configuration to use
  * --cmd		command to run for new columns:  TIME1 (all times for sample 1), TIMES (matching times for both samples),
  * 				SINGLE (only one column)
+ * --colFilter	type of column to use in difference filter-- DIFFERENTIAL, VALUE, or NONE
+ * --ranges		comma-delimited list of range limits, from lowest to highest (maximum 3)
+ * --rowFilter	rule to use for difference filter; DIFFERENT, NONE
  *
  * @author Bruce Parrello
  *
@@ -91,7 +99,16 @@ public class ColumnProcessor extends WebProcessor {
     private static final String SELECTOR_FORMAT = "sampleFilter%d";
     /** name of the sample-name datalist */
     private static final String SAMPLE_NAME_LIST = "sampleNameList";
-
+    /** array of range limits; each array entry is the exclusive upper limit for the range */
+    private double[] rangeLimits;
+    /** cell descriptors for the current row */
+    private List<CellDescriptor> row;
+    /** cell descriptors for the range-colored elements */
+    private List<CellDescriptor> coloredCells;
+    /** set of columns to be range-colored */
+    private BitSet coloredColumns;
+    /** row filter */
+    private RowFilter rowFilterObject;
 
     // COMMAND-LINE OPTIONS
 
@@ -123,6 +140,18 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--name", usage = "configuration name")
     protected String configuration;
 
+    /** type of column filter */
+    @Option(name = "--colFilter", usage = "rule for choosing columns to range-color")
+    protected ColumnQualifierType colFilter;
+
+    /** comma-delimited list of range limits */
+    @Option(name = "--ranges", metaVar = "0.1,1.1,3.0", usage = "comma-delimited list of range limits")
+    protected String ranges;
+
+    /** type of row filter */
+    @Option(name = "--rowFilter", usage = "rule for choosing rows to display")
+    protected RowFilter.Type rowFilter;
+
     /** new-column strategy */
     @Option(name = "--cmd", usage = "strategy for new columns")
     protected NewColumnCreator.Type strategy;
@@ -137,6 +166,9 @@ public class ColumnProcessor extends WebProcessor {
         this.rawFlag = false;
         this.configuration = "Default";
         this.strategy = NewColumnCreator.Type.SINGLE;
+        this.colFilter = ColumnQualifierType.NONE;
+        this.ranges = "";
+        this.rowFilter = RowFilter.Type.ALL;
     }
 
     @Override
@@ -155,6 +187,20 @@ public class ColumnProcessor extends WebProcessor {
             throw new ParseFailureException("Invalid sample name " + this.sample1 + ".");
         if (! this.sample2.isEmpty() && this.data.getColIdx(this.sample2) < 0)
             throw new ParseFailureException("Invalid sample name " + this.sample2 + ".");
+        // Verify the ranges.
+        if (this.ranges.isEmpty()) {
+            // If no range limits were specified, everything is treated as normal (range 0).
+            this.rangeLimits = new double[] { Double.POSITIVE_INFINITY };
+        } else {
+            // Here we must verify that the range limits are ascending and that there are no more than 3.
+            FloatList rangeList = new FloatList(this.ranges);
+            if (rangeList.size() > 3)
+                throw new ParseFailureException("No more than 3 range limits can be specified.");
+            this.rangeLimits = rangeList.getValues();
+            // Sort the range limits from lowest to highest.
+            Arrays.sort(this.rangeLimits);
+        }
+        this.rowFilterObject = this.rowFilter.create();
         return true;
     }
 
@@ -206,6 +252,15 @@ public class ColumnProcessor extends WebProcessor {
             // Here we have a table.  If the sort column is out of range, set it back to 0.
             if (this.sortCol < 0 || this.sortCol >= columns.length)
                 this.sortCol = 0;
+            // Create the filtering data structures.
+            this.row = new ArrayList<CellDescriptor>(columns.length);
+            this.coloredCells = new ArrayList<CellDescriptor>(columns.length);
+            this.coloredColumns = new BitSet(columns.length);
+            // Compute the colored columns.
+            for (int i = 0; i < columns.length; i++) {
+                if (this.colFilter.isRangeColored(columns[i]))
+                    this.coloredColumns.set(i);
+            }
             // Create the column specs.
             ColSpec[] specs = new ColSpec[columns.length + HEAD_COLS];
             specs[0] = new ColSpec.Num("#");
@@ -221,15 +276,41 @@ public class ColumnProcessor extends WebProcessor {
                 RnaData.FeatureData feat = dataRow.getFeat();
                 // Get the sort key for this row.
                 Key.RevRatio rowKey = columns[this.sortCol].getKey(feat);
-                // Create the row.
-                Row<Key.RevRatio> tableRow = new Row<Key.RevRatio>(table, rowKey);
-                tableRow.add(0);
-                tableRow.add(ColumnDescriptor.fidLink(feat.getId()));
-                tableRow.add(feat.getGene());
-                tableRow.add(feat.getLocation().getLength());
-                // Now fill in the numbers.
-                for (int i = 0; i < columns.length; i++)
-                    tableRow.add(columns[i].getValue(feat));
+                // Build the column descriptors.
+                for (int i = 0; i < columns.length; i++) {
+                    double value = columns[i].getValue(feat);
+                    if (! this.coloredColumns.get(i)) {
+                        // Here the column is not colored.
+                        this.row.add(new CellDescriptor(value, 0));
+                    } else {
+                        // Here the column is colored.  We need to compute the color.
+                        int color = 0;
+                        while (color < this.rangeLimits.length && value > this.rangeLimits[color]) color++;
+                        CellDescriptor cell = new CellDescriptor(value, color);
+                        this.row.add(cell);
+                        this.coloredCells.add(cell);
+                    }
+                }
+                // Check the row filter.
+                if (this.rowFilterObject.isRowDisplayable(this.coloredCells)) {
+                    // Create the row.
+                    Row<Key.RevRatio> tableRow = new Row<Key.RevRatio>(table, rowKey);
+                    tableRow.add(0);
+                    tableRow.add(ColumnDescriptor.fidLink(feat.getId()));
+                    tableRow.add(feat.getGene());
+                    tableRow.add(feat.getLocation().getLength());
+                    // Now fill in the numbers.
+                    for (int i = 0; i < columns.length; i++) {
+                        CellDescriptor cell = this.row.get(i);
+                        tableRow.add(cell.getValue());
+                        int color = cell.getRange();
+                        if (color > 0)
+                            tableRow.addStyle(i + HEAD_COLS, String.format("range%d", color));
+                    }
+                }
+                // Set up for the next row.
+                this.row.clear();
+                this.coloredCells.clear();
             }
             table.setIndexColumn(0);
             // Format the table and store it in the output list.
@@ -309,6 +390,10 @@ public class ColumnProcessor extends WebProcessor {
         // Add the checkboxes.
         form.addCheckBoxWithDefault("reset", "Remove existing columns", false);
         form.addCheckBoxWithDefault("raw", "display raw FPKM numbers", this.rawFlag);
+        // Add the coloring controls.
+        form.addTextRow("ranges", "Comma-delimited list of range-coloring limits (no spaces)", this.ranges);
+        form.addEnumRow("rowFilter", "Row-filtering rule", this.rowFilter, RowFilter.Type.values());
+        form.addEnumRow("colFilter", "Range-coloring rule", this.colFilter, ColumnQualifierType.values());
         // Add a hidden field to maintain the configuration name.
         form.addHidden("name", this.configuration);
         // Now create the load form.
