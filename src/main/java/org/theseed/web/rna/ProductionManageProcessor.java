@@ -113,8 +113,7 @@ public class ProductionManageProcessor extends ManageProcessor {
     @Override
     protected DomContent describeConfiguration(CookieFile cookies, String config) {
         ContainerTag retVal = ul();
-        try {
-            CookieFile otherCookies = new CookieFile(this.fileMap.get(config));
+        try (CookieFile otherCookies = new CookieFile(this.fileMap.get(config))) {
             this.descriptionBuffer.clear().append("Allowing:");
             int allowCount = 0;
             for (String name : ProductionProcessor.FRAGMENT_NAMES) {
