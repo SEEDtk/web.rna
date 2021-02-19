@@ -5,6 +5,9 @@ package org.theseed.web;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -20,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.theseed.reports.CoreHtmlUtilities;
 import org.theseed.rna.RnaData;
+import org.theseed.subsystems.GenomeSubsystemTable;
 import org.theseed.utils.FloatList;
 import org.theseed.utils.ParseFailureException;
 import org.theseed.web.rna.CellDescriptor;
@@ -39,6 +43,9 @@ import static j2html.TagCreator.*;
  * left and then output columns based on that feature data.  Each output column is either the expression data for
  * a single sample or differential ratios between two samples.  The user can add columns one by one and can also choose
  * a column for sorting.
+ *
+ * The feature information consists of the feature ID, its common gene name, and a list of subsystem IDs.  The
+ * subsystem information is taken from the "rnaSubs.txt" file.
  *
  * Each column is titled with a sample name.  Sample names have multiple components separated by underscores.  These are
  * translated to spaces for display to allow wrapping.  Differential columns have two sample names separated by a colored slash.
@@ -79,6 +86,8 @@ public class ColumnProcessor extends WebProcessor {
     protected static Logger log = LoggerFactory.getLogger(ColumnProcessor.class);
     /** RNA data repository */
     private RnaData data;
+    /** subsystem data table */
+    private GenomeSubsystemTable subTable;
     /** list of sample names */
     private List<String> samples;
     /** cookie file name */
@@ -90,7 +99,7 @@ public class ColumnProcessor extends WebProcessor {
     /** column configuration variable name prefix */
     public static final String COLUMNS_PREFIX = "Columns.";
     /** number of columns before the data section */
-    private static final int HEAD_COLS = 4;
+    private static final int HEAD_COLS = 5;
     /** URL generator for column delete */
     private static final String DELETE_COL_URL_FORMAT = "/rna.cgi/columns?sortCol=%d;deleteCol=%d";
     /** definition for filtering checkboxes */
@@ -212,6 +221,9 @@ public class ColumnProcessor extends WebProcessor {
 
     @Override
     protected void runWebCommand(CookieFile cookies) throws Exception {
+        // Get the subsystem table.
+        File subFile = new File(this.getCoreDir(), "rnaSubs.txt");
+        this.subTable = new GenomeSubsystemTable(subFile);
         // Create the list of samples.
         this.samples = this.data.getSamples().stream().map(x -> x.getName()).collect(Collectors.toList());
         // Build the cookie string describing all the columns.
@@ -270,6 +282,7 @@ public class ColumnProcessor extends WebProcessor {
             specs[1] = new ColSpec.Normal("peg_id");
             specs[2] = new ColSpec.Normal("gene");
             specs[3] = new ColSpec.Num("na_len");
+            specs[4] = new ColSpec.Normal("subsystems");
             for (int i = 0; i < columns.length; i++)
                 specs[i+HEAD_COLS] = this.columnSpec(columns[i], i);
             HtmlTable<MultiKey> table = new HtmlTable<>(specs);
@@ -302,6 +315,7 @@ public class ColumnProcessor extends WebProcessor {
                     tableRow.add(ColumnDescriptor.fidLink(feat.getId()));
                     tableRow.add(feat.getGene());
                     tableRow.add(feat.getLocation().getLength());
+                    tableRow.add(this.getSubsystemList(feat.getId()));
                     // Now fill in the numbers.
                     for (int i = 0; i < columns.length; i++) {
                         CellDescriptor cell = this.row.get(i);
@@ -327,6 +341,37 @@ public class ColumnProcessor extends WebProcessor {
         DomContent wrapped = this.getPageWriter().highlightBlock(assembly);
         // Write the page.
         this.getPageWriter().writePage("RNA Expression Data", text("RNA Expression Data"), wrapped);
+    }
+
+    /**
+     * This method creates the subsystem ID link list.  Each ID shows a tooltip describing the subsystem and
+     * links to the subsystem page.
+     *
+     * @param id	ID of the feature in question
+     *
+     * @return HTML listing the subsystems connected to the specified feature
+     */
+    private DomContent getSubsystemList(String id) {
+        Set<GenomeSubsystemTable.SubData> subs = this.subTable.getSubsystems(id);
+        DomContent retVal;
+        if (subs == null)
+            retVal = rawHtml("&nbsp;");
+        else try {
+            // Here we have actual subsystems to list.
+            List<DomContent> linkList = new ArrayList<DomContent>(subs.size());
+            for (GenomeSubsystemTable.SubData sub : subs) {
+                String text = sub.getId();
+                String tooltip = sub.getDescription();
+                String url = this.getPageWriter().local_url("/rna.cgi/subsystem?name=" +
+                        URLEncoder.encode(sub.getName(), StandardCharsets.UTF_8.toString()),
+                        this.getWorkSpace());
+                linkList.add(a(text).withTitle(tooltip).withHref(url).withTarget("_blank"));
+            }
+            retVal = rawHtml(linkList.stream().map(x -> x.render()).collect(Collectors.joining(", ")));
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+        }
+        return retVal;
     }
 
     /**

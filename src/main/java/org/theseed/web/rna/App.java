@@ -8,6 +8,7 @@ import org.theseed.web.ProductionProcessor;
 import org.theseed.web.RnaMetaProcessor;
 import org.theseed.web.SampleDisplayProcessor;
 import org.theseed.web.ScatterProcessor;
+import org.theseed.web.SubsystemPageProcessor;
 import org.theseed.web.WebProcessor;
 
 /**
@@ -20,6 +21,7 @@ import org.theseed.web.WebProcessor;
  * scatter		display predictions vs actual on a graph
  * production	display predictions for virtual and real samples
  * sample		display details for one or more samples
+ * subsystem	display a subsystem from a GTO
  *
  */
 public class App
@@ -55,6 +57,9 @@ public class App
             break;
         case "sample" :
             processor = new SampleDisplayProcessor();
+            break;
+        case "subsystem" :
+            processor = new SubsystemPageProcessor();
             break;
         default:
             throw new RuntimeException("Invalid command " + command);
