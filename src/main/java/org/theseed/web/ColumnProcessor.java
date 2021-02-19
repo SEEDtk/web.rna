@@ -25,6 +25,7 @@ import org.theseed.utils.ParseFailureException;
 import org.theseed.web.rna.CellDescriptor;
 import org.theseed.web.rna.ColumnDescriptor;
 import org.theseed.web.rna.ColumnQualifierType;
+import org.theseed.web.rna.MultiKey;
 import org.theseed.web.rna.NewColumnCreator;
 import org.theseed.web.rna.RowFilter;
 import org.theseed.web.rna.SimpleColumnDescriptor;
@@ -249,9 +250,11 @@ public class ColumnProcessor extends WebProcessor {
         List<DomContent> parts = new ArrayList<DomContent>(2);
         // Verify that we have a table to display.
         if (columns.length > 0) {
-            // Here we have a table.  If the sort column is out of range, set it back to 0.
+            // Here we have a table.  If the sort column is out of range, set to to -1.
             if (this.sortCol < 0 || this.sortCol >= columns.length)
-                this.sortCol = 0;
+                this.sortCol = -1;
+            // Fetch the actual column for sorting.
+            ColumnDescriptor sortingColumn = (this.sortCol < 0 ? null : columns[this.sortCol]);
             // Create the filtering data structures.
             this.row = new ArrayList<CellDescriptor>(columns.length);
             this.coloredCells = new ArrayList<CellDescriptor>(columns.length);
@@ -269,13 +272,13 @@ public class ColumnProcessor extends WebProcessor {
             specs[3] = new ColSpec.Num("na_len");
             for (int i = 0; i < columns.length; i++)
                 specs[i+HEAD_COLS] = this.columnSpec(columns[i], i);
-            HtmlTable<Key.RevRatio> table = new HtmlTable<>(specs);
+            HtmlTable<MultiKey> table = new HtmlTable<>(specs);
             // Now we create a row for each feature.
             for (RnaData.Row dataRow : this.data) {
                 // Get the feature for this row.
                 RnaData.FeatureData feat = dataRow.getFeat();
                 // Get the sort key for this row.
-                Key.RevRatio rowKey = columns[this.sortCol].getKey(feat);
+                MultiKey rowKey = new MultiKey(feat, sortingColumn);
                 // Build the column descriptors.
                 for (int i = 0; i < columns.length; i++) {
                     double value = columns[i].getValue(feat);
@@ -294,7 +297,7 @@ public class ColumnProcessor extends WebProcessor {
                 // Check the row filter.
                 if (this.rowFilterObject.isRowDisplayable(this.coloredCells)) {
                     // Create the row.
-                    Row<Key.RevRatio> tableRow = new Row<Key.RevRatio>(table, rowKey);
+                    Row<MultiKey> tableRow = new Row<MultiKey>(table, rowKey);
                     tableRow.add(0);
                     tableRow.add(ColumnDescriptor.fidLink(feat.getId()));
                     tableRow.add(feat.getGene());
