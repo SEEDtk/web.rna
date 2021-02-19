@@ -168,7 +168,7 @@ public class ColumnProcessor extends WebProcessor {
 
     @Override
     protected void setWebDefaults() {
-        this.sortCol = -1;
+        this.sortCol = -2;
         this.deleteCol = -1;
         this.sample1 = "";
         this.sample2 = "";
@@ -249,7 +249,7 @@ public class ColumnProcessor extends WebProcessor {
                 cookieString = ColumnDescriptor.deleteColumn(cookieString, this.deleteCol);
             }
             // Is the sort column unspecified?
-            if (this.sortCol < 0) {
+            if (this.sortCol < -1) {
                 // Yes.  Extract it from the original string.
                 this.sortCol = ColumnDescriptor.getSortCol(oldCookieString);
             }
@@ -431,8 +431,8 @@ public class ColumnProcessor extends WebProcessor {
         form.addSearchRow("sample2", "Optional Denominator Sample", "", SAMPLE_NAME_LIST);
         // Add the sort column specifier.
         List<String> sortCols = Arrays.stream(columns).map(x -> x.getTitle()).collect(Collectors.toList());
-        String defaultCol = (sortCols.size() > 0 ? sortCols.get(this.sortCol) : null);
-        form.addChoiceIndexedRow("sortCol", "Column for sorting", defaultCol, sortCols);
+        String defaultCol = (sortCols.size() > 0 && this.sortCol >= 0 ? sortCols.get(this.sortCol) : null);
+        form.addChoiceIndexedRow("sortCol", "Column for sorting", defaultCol, sortCols, "Sort by Location");
         // Add the strategy.
         form.addEnumRow("cmd", "New-column Strategy", NewColumnCreator.Type.SINGLE, NewColumnCreator.Type.values());
         // Add the checkboxes.
