@@ -5,6 +5,9 @@ package org.theseed.web.rna;
 
 import java.util.List;
 
+import org.theseed.rna.RnaData.FeatureData;
+import org.theseed.web.ColumnProcessor;
+
 /**
  * This filter only displays rows where at least one cell has a different range color from the others.
  *
@@ -12,9 +15,18 @@ import java.util.List;
  */
 public class VariantRowFilter extends RowFilter {
 
+    // FIELDS
+    /** parent column processor */
+    private ColumnProcessor processor;
+
+    public VariantRowFilter(ColumnProcessor processor) {
+        this.processor = processor;
+    }
+
     @Override
-    public boolean isRowDisplayable(List<CellDescriptor> cells) {
+    public boolean isRowDisplayable(FeatureData feat) {
         boolean retVal = false;
+        List<CellDescriptor> cells = processor.getColoredCells();
         if (cells.size() > 0) {
             int range = cells.get(0).getRange();
             for (int i = 1; i < cells.size() && ! retVal; i++)

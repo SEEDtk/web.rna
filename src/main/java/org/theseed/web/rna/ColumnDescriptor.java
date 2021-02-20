@@ -13,7 +13,7 @@ import org.theseed.rna.RnaData;
 import org.theseed.rna.RnaData.FeatureData;
 import org.theseed.web.Key;
 
-import j2html.tags.DomContent;
+import j2html.tags.ContainerTag;
 
 /**
  * This object describes an output column for the RNA data.  It provides methods for converting to and from a string
@@ -101,7 +101,7 @@ public abstract class ColumnDescriptor {
      * @param feat	feature for the row
      */
     public RnaData.Row getRow(RnaData.FeatureData feat) {
-        return this.data.getRow(feat);
+        return this.data.getRow(feat.getId());
     }
 
     /**
@@ -254,7 +254,7 @@ public abstract class ColumnDescriptor {
      *
      * @param id	feature ID to link
      */
-    public static DomContent fidLink(String id) {
+    public static ContainerTag fidLink(String id) {
         return linker.featureLink(id);
     }
 

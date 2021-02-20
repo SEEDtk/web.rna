@@ -5,12 +5,10 @@ package org.theseed.web;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -75,6 +73,8 @@ import static j2html.TagCreator.*;
  * --colFilter	type of column to use in difference filter-- DIFFERENTIAL, VALUE, or NONE
  * --ranges		comma-delimited list of range limits, from lowest to highest (maximum 3)
  * --rowFilter	rule to use for difference filter; DIFFERENT, NONE
+ * --focus		if specified, the ID of a peg; the screen will scroll to that peg
+ * --subsystem	subsystem to color
  *
  * @author Bruce Parrello
  *
@@ -119,6 +119,8 @@ public class ColumnProcessor extends WebProcessor {
     private BitSet coloredColumns;
     /** row filter */
     private RowFilter rowFilterObject;
+    /** set of features in the focus subsystem */
+    private Set<String> subFids;
 
     // COMMAND-LINE OPTIONS
 
@@ -166,6 +168,14 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--cmd", usage = "strategy for new columns")
     protected NewColumnCreator.Type strategy;
 
+    /** focus peg */
+    @Option(name = "--focus", metaVar = "fig|511145.183.peg.640", usage = "focus gene")
+    protected String focusPeg;
+
+    /** subsystem to color */
+    @Option(name = "--subsystem", metaVar = "AspaThreModu", usage = "subsystem to highlight")
+    protected String subsystem;
+
     @Override
     protected void setWebDefaults() {
         this.sortCol = -2;
@@ -179,6 +189,8 @@ public class ColumnProcessor extends WebProcessor {
         this.colFilter = ColumnQualifierType.NONE;
         this.ranges = "";
         this.rowFilter = RowFilter.Type.ALL;
+        this.focusPeg = "";
+        this.subsystem = "";
     }
 
     @Override
@@ -210,7 +222,7 @@ public class ColumnProcessor extends WebProcessor {
             // Sort the range limits from lowest to highest.
             Arrays.sort(this.rangeLimits);
         }
-        this.rowFilterObject = this.rowFilter.create();
+        this.rowFilterObject = this.rowFilter.create(this);
         return true;
     }
 
@@ -286,6 +298,8 @@ public class ColumnProcessor extends WebProcessor {
             for (int i = 0; i < columns.length; i++)
                 specs[i+HEAD_COLS] = this.columnSpec(columns[i], i);
             HtmlTable<MultiKey> table = new HtmlTable<>(specs);
+            // Save the subsystem feature set.
+            this.subFids = this.subTable.getSubFeatures(this.subsystem);
             // Now we create a row for each feature.
             for (RnaData.Row dataRow : this.data) {
                 // Get the feature for this row.
@@ -308,14 +322,36 @@ public class ColumnProcessor extends WebProcessor {
                     }
                 }
                 // Check the row filter.
-                if (this.rowFilterObject.isRowDisplayable(this.coloredCells)) {
+                if (this.rowFilterObject.isRowDisplayable(feat)) {
                     // Create the row.
                     Row<MultiKey> tableRow = new Row<MultiKey>(table, rowKey);
+                    // Put in a placeholder for the numbering column.
                     tableRow.add(0);
-                    tableRow.add(ColumnDescriptor.fidLink(feat.getId()));
-                    tableRow.add(feat.getGene());
+                    // Set up the PEG ID.  This contains a link to the feature's PATRIC page.
+                    // We also need to mark it if it is the focus peg.
+                    String fid = feat.getId();
+                    ContainerTag fidLink = ColumnDescriptor.fidLink(fid);
+                    if (fid.contentEquals(this.focusPeg))
+                        fidLink.withId(FOCUS_CLASS);
+                    tableRow.add(fidLink);
+                    // Set up the gene ID.  if it is non-empty, we link it to a neighborhood filter.
+                    String gene = feat.getGene();
+                    DomContent geneHtml;
+                    if (gene.isEmpty())
+                        geneHtml = rawHtml("&nbsp;");
+                    else {
+                        String regionURL = String.format("/rna.cgi/columns?focus=%s;rowFilter=REGION", fid);
+                        String regionLink = this.getPageWriter().local_url(regionURL, this.getWorkSpace());
+                        geneHtml = a(gene).withHref(regionLink).withTarget("_blank");
+                    }
+                    tableRow.add(geneHtml);
                     tableRow.add(feat.getLocation().getLength());
-                    tableRow.add(this.getSubsystemList(feat.getId()));
+                    // Now we process the subsystem column.
+                    Set<GenomeSubsystemTable.SubData> subs = this.subTable.getSubsystems(feat.getId());
+                    tableRow.add(this.getSubsystemList(fid, subs));
+                    // Check for the highlight subsystem.
+                    if (this.subFids.contains(fid))
+                        tableRow.highlight(4);
                     // Now fill in the numbers.
                     for (int i = 0; i < columns.length; i++) {
                         CellDescriptor cell = this.row.get(i);
@@ -347,29 +383,27 @@ public class ColumnProcessor extends WebProcessor {
      * This method creates the subsystem ID link list.  Each ID shows a tooltip describing the subsystem and
      * links to the subsystem page.
      *
-     * @param id	ID of the feature in question
+     * @param fid	ID of the feature whose subsystems are being listed
+     * @param subs	list of subsystem descriptors
      *
      * @return HTML listing the subsystems connected to the specified feature
      */
-    private DomContent getSubsystemList(String id) {
-        Set<GenomeSubsystemTable.SubData> subs = this.subTable.getSubsystems(id);
+    private DomContent getSubsystemList(String fid, Collection<GenomeSubsystemTable.SubData> subs) {
         DomContent retVal;
         if (subs == null)
             retVal = rawHtml("&nbsp;");
-        else try {
+        else {
             // Here we have actual subsystems to list.
             List<DomContent> linkList = new ArrayList<DomContent>(subs.size());
             for (GenomeSubsystemTable.SubData sub : subs) {
                 String text = sub.getId();
                 String tooltip = sub.getDescription();
-                String url = this.getPageWriter().local_url("/rna.cgi/subsystem?name=" +
-                        URLEncoder.encode(sub.getName(), StandardCharsets.UTF_8.toString()),
-                        this.getWorkSpace());
-                linkList.add(a(text).withTitle(tooltip).withHref(url).withTarget("_blank"));
+                // Set up a URL to focus on the subsystem.
+                String url = String.format("/rna.cgi/columns?subsystem=%s;focus=%s", text, fid);
+                url = this.getPageWriter().local_url(url, this.getWorkSpace());
+                linkList.add(a(text).withTitle(tooltip).withHref(url));
             }
             retVal = rawHtml(linkList.stream().map(x -> x.render()).collect(Collectors.joining(", ")));
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
         }
         return retVal;
     }
@@ -442,6 +476,9 @@ public class ColumnProcessor extends WebProcessor {
         form.addTextRow("ranges", "Comma-delimited list of range-coloring limits (no spaces)", this.ranges);
         form.addEnumRow("rowFilter", "Row-filtering rule", this.rowFilter, RowFilter.Type.values());
         form.addEnumRow("colFilter", "Range-coloring rule", this.colFilter, ColumnQualifierType.values());
+        // Now the focus peg and the subsystem chooser.
+        form.addTextRow("focus", "Focus Peg", this.focusPeg);
+        form.addChoiceRow("subsystem", "Subsystem to highlight", this.subsystem, this.subTable.getAllSubsystems(), "");
         // Add a hidden field to maintain the configuration name.
         form.addHidden("name", this.configuration);
         // Now create the load form.
@@ -516,5 +553,25 @@ public class ColumnProcessor extends WebProcessor {
                 .map(x -> StringUtils.removeStart(x, COLUMNS_PREFIX)).sorted().collect(Collectors.toList());
     }
 
+    /**
+     * @return the row for the current focus peg
+     */
+    public RnaData.Row getFocus() {
+        return this.data.getRow(this.focusPeg);
+    }
+
+    /**
+     * @return the cell descriptors for the cells with coloring in the current row
+     */
+    public List<CellDescriptor> getColoredCells() {
+        return this.coloredCells;
+    }
+
+    /**
+     * @return the set of features in the focus subsystem
+     */
+    public Set<String> getSubFids() {
+        return this.subFids;
+    }
 
 }
