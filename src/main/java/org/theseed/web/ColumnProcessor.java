@@ -340,7 +340,7 @@ public class ColumnProcessor extends WebProcessor {
                     if (gene.isEmpty())
                         geneHtml = rawHtml("&nbsp;");
                     else {
-                        String regionURL = String.format("/rna.cgi/columns?focus=%s;rowFilter=REGION", fid);
+                        String regionURL = String.format("/rna.cgi/columns?focus=%s;rowFilter=REGION;sortCol=-1", fid);
                         String regionLink = this.getPageWriter().local_url(regionURL, this.getWorkSpace());
                         geneHtml = a(gene).withHref(regionLink).withTarget("_blank");
                     }
