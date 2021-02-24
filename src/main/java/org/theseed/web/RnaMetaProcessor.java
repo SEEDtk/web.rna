@@ -44,11 +44,13 @@ public class RnaMetaProcessor extends WebProcessor {
         log.info("{} samples in RNA dataset {}.", data.size(), dataFile);
         // Create a table for the meta-data.
         HtmlTable<Key.Null> table = new HtmlTable<>(new ColSpec.Normal("sample_id"), new ColSpec.Fraction("Thr g/l"),
-                new ColSpec.Num("OD"), new ColSpec.Normal("original_name"));
+                new ColSpec.Num("OD"), new ColSpec.Normal("original_name"), new ColSpec.Num("reads"), new ColSpec.Num("size"),
+                new ColSpec.Num("pct_qual"), new ColSpec.Normal("process_date"));
         // Run through the samples, adding rows.
         for (RnaData.JobData sample : data.getSamples()) {
             new Row<Key.Null>(table, Key.NONE).add(sample.getName()).add(sample.getProduction())
-                    .add(sample.getOpticalDensity()).add(sample.getOldName());
+                    .add(sample.getOpticalDensity()).add(sample.getOldName()).add(sample.getReadCount())
+                    .add(sample.getBaseCount()).add(sample.getQuality()).add(sample.getProcessingDate().toString());
         }
         DomContent tableHtml = this.getPageWriter().highlightBlock(table.output());
         this.getPageWriter().writePage("RNA Seq Metadata", text("Table of Samples"), tableHtml);
