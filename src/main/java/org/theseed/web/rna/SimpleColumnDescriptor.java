@@ -8,6 +8,8 @@ import org.theseed.rna.RnaData;
 import org.theseed.rna.RnaData.FeatureData;
 import org.theseed.web.Key;
 
+import j2html.tags.DomContent;
+
 /**
  * This class contains a column that just displays the expression levels for a sample.
  *
@@ -26,7 +28,7 @@ public class SimpleColumnDescriptor extends ColumnDescriptor {
     }
 
     @Override
-    public String getTitle() {
+    public String getTitleString() {
         String retVal = this.getSample(this.colIdx).getName();
         retVal = StringUtils.replaceChars(retVal, '_', ' ');
         return retVal;
@@ -47,5 +49,12 @@ public class SimpleColumnDescriptor extends ColumnDescriptor {
     public Key.RevRatio getKey(FeatureData feat) {
         return new Key.RevRatio(this.getValue(feat), 1.0);
     }
+
+    @Override
+    public DomContent getTitle() {
+        DomContent retVal = this.computeName(this.colIdx);
+        return retVal;
+    }
+
 
 }

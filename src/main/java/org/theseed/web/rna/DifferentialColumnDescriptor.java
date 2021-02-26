@@ -4,9 +4,12 @@
 package org.theseed.web.rna;
 
 import org.apache.commons.lang3.StringUtils;
+import static j2html.TagCreator.*;
 import org.theseed.rna.RnaData;
 import org.theseed.rna.RnaData.FeatureData;
 import org.theseed.web.Key;
+
+import j2html.tags.DomContent;
 
 /**
  * This displays a column that contains the ratio between expression levels for two samples.
@@ -43,12 +46,13 @@ public class DifferentialColumnDescriptor extends ColumnDescriptor {
     }
 
     @Override
-    public String getTitle() {
+    public String getTitleString() {
         String retVal = this.getSample(this.colIdx1).getName() + " / " +
                 this.getSample(this.colIdx2).getName();
         retVal = StringUtils.replaceChars(retVal, '_', ' ');
         return retVal;
     }
+
 
     @Override
     public String getTooltip() {
@@ -70,6 +74,13 @@ public class DifferentialColumnDescriptor extends ColumnDescriptor {
         double dem = this.getWeight(feat, this.colIdx2);
         double num = this.getWeight(feat, this.colIdx1);
         return new Key.RevRatio(num, dem);
+    }
+
+    @Override
+    public DomContent getTitle() {
+        DomContent retVal = join(this.computeName(this.colIdx1), " / ",
+                this.computeName(this.colIdx2));
+        return retVal;
     }
 
 }

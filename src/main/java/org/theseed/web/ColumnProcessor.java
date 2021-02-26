@@ -464,7 +464,7 @@ public class ColumnProcessor extends WebProcessor {
         form.addSearchRow("sample1", "Primary RNA Sampling", "", SAMPLE_NAME_LIST);
         form.addSearchRow("sample2", "Optional Denominator Sample", "", SAMPLE_NAME_LIST);
         // Add the sort column specifier.
-        List<String> sortCols = Arrays.stream(columns).map(x -> x.getTitle()).collect(Collectors.toList());
+        List<String> sortCols = Arrays.stream(columns).map(x -> x.getTitleString()).collect(Collectors.toList());
         String defaultCol = (sortCols.size() > 0 && this.sortCol >= 0 ? sortCols.get(this.sortCol) : null);
         form.addChoiceIndexedRow("sortCol", "Column for sorting", defaultCol, sortCols, "Sort by Location");
         // Add the strategy.

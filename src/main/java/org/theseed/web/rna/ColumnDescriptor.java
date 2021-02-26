@@ -14,6 +14,8 @@ import org.theseed.rna.RnaData.FeatureData;
 import org.theseed.web.Key;
 
 import j2html.tags.ContainerTag;
+import j2html.tags.DomContent;
+import static j2html.TagCreator.*;
 
 /**
  * This object describes an output column for the RNA data.  It provides methods for converting to and from a string
@@ -124,7 +126,12 @@ public abstract class ColumnDescriptor {
     /**
      * @return the title for this column
      */
-    public abstract String getTitle();
+    public abstract DomContent getTitle();
+
+    /**
+     * @return the title string for this column
+     */
+    public abstract String getTitleString();
 
     /**
      * @return the tooltip for this column
@@ -266,6 +273,23 @@ public abstract class ColumnDescriptor {
      */
     public static String savecookies(String cookieString, int sortCol) {
         return String.format("%s%s%d", cookieString, SORT_SEP_CHAR, sortCol);
+    }
+
+    /**
+     * @return the HTML for displaying a sample name
+     *
+     * @param colIdx	column index in the RNA database of the sample
+     */
+    public DomContent computeName(int colIdx) {
+        DomContent retVal;
+        String name = this.getSample(colIdx).getName();
+        name = StringUtils.replaceChars(name, '_', ' ');
+        if (this.getSample(colIdx).isSuspicious()) {
+            retVal = em(name);
+        } else {
+            retVal = strong(name);
+        }
+        return retVal;
     }
 
 }
