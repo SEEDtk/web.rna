@@ -3,7 +3,7 @@
  */
 package org.theseed.web.rna;
 
-import org.theseed.proteins.SampleId;
+import org.theseed.samples.SampleId;
 import org.theseed.web.HtmlTable;
 import org.theseed.web.Key;
 

@@ -12,7 +12,7 @@ import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.theseed.io.TabbedLineReader;
-import org.theseed.proteins.SampleId;
+import org.theseed.samples.SampleId;
 import org.theseed.utils.ParseFailureException;
 
 import j2html.tags.ContainerTag;

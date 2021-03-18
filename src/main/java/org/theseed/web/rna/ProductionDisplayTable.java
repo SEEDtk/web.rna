@@ -5,7 +5,8 @@ package org.theseed.web.rna;
 
 import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
 import static j2html.TagCreator.*;
-import org.theseed.proteins.SampleId;
+
+import org.theseed.samples.SampleId;
 import org.theseed.web.ColSpec;
 import org.theseed.web.HtmlTable;
 import org.theseed.web.Key;
