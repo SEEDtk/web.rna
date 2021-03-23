@@ -574,4 +574,11 @@ public class ColumnProcessor extends WebProcessor {
         return this.subFids;
     }
 
+    /**
+     * @return the subsystem table
+     */
+    public GenomeSubsystemTable getSubTable() {
+        return this.subTable;
+    }
+
 }

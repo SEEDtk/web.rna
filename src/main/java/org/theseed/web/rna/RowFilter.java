@@ -56,6 +56,18 @@ public abstract class RowFilter {
             public String getDescription() {
                 return "Only show rows in the focus subsystem.";
             }
+        }, ANYSUB {
+
+            @Override
+            public RowFilter create(ColumnProcessor processor) {
+                return new AnySubsystemFilter(processor);
+            }
+
+            @Override
+            public String getDescription() {
+                return "Only show rows with subsystems.";
+            }
+
         };
 
 
