@@ -5,7 +5,7 @@ package org.theseed.web.rna;
 
 import org.theseed.locations.Location;
 import org.theseed.rna.RnaData;
-import org.theseed.rna.RnaData.FeatureData;
+import org.theseed.rna.RnaFeatureData;
 
 /**
  * @author Bruce Parrello
@@ -28,7 +28,7 @@ public class RegionRowFilter extends RowFilter {
     }
 
     @Override
-    public boolean isRowDisplayable(FeatureData feat) {
+    public boolean isRowDisplayable(RnaFeatureData feat) {
         boolean retVal = true;
         if (this.loc != null) {
             Location loc2 = feat.getLocation();

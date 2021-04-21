@@ -4,8 +4,7 @@
 package org.theseed.web.rna;
 
 import org.apache.commons.lang3.StringUtils;
-import org.theseed.rna.RnaData;
-import org.theseed.rna.RnaData.FeatureData;
+import org.theseed.rna.RnaFeatureData;
 import org.theseed.web.Key;
 
 import j2html.tags.DomContent;
@@ -23,7 +22,7 @@ public class SimpleColumnDescriptor extends ColumnDescriptor {
     private int colIdx;
 
     @Override
-    public double getValue(RnaData.FeatureData feat) {
+    public double getValue(RnaFeatureData feat) {
         return this.getWeight(feat, this.colIdx);
     }
 
@@ -46,7 +45,7 @@ public class SimpleColumnDescriptor extends ColumnDescriptor {
     }
 
     @Override
-    public Key.RevRatio getKey(FeatureData feat) {
+    public Key.RevRatio getKey(RnaFeatureData feat) {
         return new Key.RevRatio(this.getValue(feat), 1.0);
     }
 

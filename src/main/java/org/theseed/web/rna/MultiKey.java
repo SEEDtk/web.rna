@@ -3,7 +3,7 @@
  */
 package org.theseed.web.rna;
 
-import org.theseed.rna.RnaData;
+import org.theseed.rna.RnaFeatureData;
 import org.theseed.web.CellContent;
 import org.theseed.web.ColSpec;
 import org.theseed.web.Key;
@@ -18,7 +18,7 @@ public class MultiKey extends Key implements Comparable<MultiKey> {
 
     // FIELDS
     /** target feature data */
-    private RnaData.FeatureData feat;
+    private RnaFeatureData feat;
     /** ratio for primary sort */
     private Key.RevRatio ratio;
     /** constant RevRatio for location-only sorts */
@@ -30,7 +30,7 @@ public class MultiKey extends Key implements Comparable<MultiKey> {
      * @param feat	feature being sorted
      * @param col	sort column, or NULL if sorting is by location only
      */
-    public MultiKey(RnaData.FeatureData feat, ColumnDescriptor col) {
+    public MultiKey(RnaFeatureData feat, ColumnDescriptor col) {
         this.feat = feat;
         if (col == null)
             this.ratio = LOCATION_ONLY;

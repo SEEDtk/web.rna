@@ -5,8 +5,8 @@ package org.theseed.web.rna;
 
 import org.apache.commons.lang3.StringUtils;
 import static j2html.TagCreator.*;
-import org.theseed.rna.RnaData;
-import org.theseed.rna.RnaData.FeatureData;
+
+import org.theseed.rna.RnaFeatureData;
 import org.theseed.web.Key;
 
 import j2html.tags.DomContent;
@@ -37,7 +37,7 @@ public class DifferentialColumnDescriptor extends ColumnDescriptor {
     }
 
     @Override
-    public double getValue(RnaData.FeatureData feat) {
+    public double getValue(RnaFeatureData feat) {
         double retVal;
         double dem = this.getWeight(feat, this.colIdx2);
         double num = this.getWeight(feat, this.colIdx1);
@@ -70,7 +70,7 @@ public class DifferentialColumnDescriptor extends ColumnDescriptor {
     }
 
     @Override
-    public Key.RevRatio getKey(FeatureData feat) {
+    public Key.RevRatio getKey(RnaFeatureData feat) {
         double dem = this.getWeight(feat, this.colIdx2);
         double num = this.getWeight(feat, this.colIdx1);
         return new Key.RevRatio(num, dem);

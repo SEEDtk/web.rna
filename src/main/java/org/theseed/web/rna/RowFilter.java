@@ -3,7 +3,7 @@
  */
 package org.theseed.web.rna;
 
-import org.theseed.rna.RnaData.FeatureData;
+import org.theseed.rna.RnaFeatureData;
 import org.theseed.utils.IDescribable;
 import org.theseed.web.ColumnProcessor;
 
@@ -82,7 +82,7 @@ public abstract class RowFilter {
      *
      * @param feat		feature being displayed
      */
-    public abstract boolean isRowDisplayable(FeatureData feat);
+    public abstract boolean isRowDisplayable(RnaFeatureData feat);
 
     /**
      * This is the simplest type of row filter:  it accepts every row.
@@ -90,7 +90,7 @@ public abstract class RowFilter {
     public static class All extends RowFilter {
 
         @Override
-        public boolean isRowDisplayable(FeatureData feat) {
+        public boolean isRowDisplayable(RnaFeatureData feat) {
             return true;
         }
 

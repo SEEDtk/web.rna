@@ -26,7 +26,8 @@ public abstract class NewColumnCreator {
     public static enum Type implements IDescribable {
         TIME1("iterate through all times for Primary"),
         TIMES("compare same times for Primary over Optional"),
-        SINGLE("add one column");
+        SINGLE("add one column"),
+        ALL("show all samples");
 
         private String description;
 
@@ -53,6 +54,9 @@ public abstract class NewColumnCreator {
             case SINGLE:
                 retVal = new SingleNewColumnCreator(samp1, samp2, samps);
                 break;
+            case ALL:
+                retVal = new AllNewColumnCreator(samps);
+                break;
             }
             return retVal;
         }
@@ -60,6 +64,13 @@ public abstract class NewColumnCreator {
         @Override
         public String getDescription() {
             return this.description;
+        }
+
+        /**
+         * @return TRUE if this creator type requires a first sample
+         */
+        public boolean requires1() {
+            return (this != ALL);
         }
     }
 
@@ -119,6 +130,13 @@ public abstract class NewColumnCreator {
      */
     protected String getSample2() {
         return this.sample2;
+    }
+
+    /**
+     * @return a list of all the samples
+     */
+    protected List<String> getAllSamples() {
+        return this.samples;
     }
 
     /**

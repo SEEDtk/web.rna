@@ -5,7 +5,7 @@ package org.theseed.web.rna;
 
 import java.util.List;
 
-import org.theseed.rna.RnaData.FeatureData;
+import org.theseed.rna.RnaFeatureData;
 import org.theseed.web.ColumnProcessor;
 
 /**
@@ -24,7 +24,7 @@ public class VariantRowFilter extends RowFilter {
     }
 
     @Override
-    public boolean isRowDisplayable(FeatureData feat) {
+    public boolean isRowDisplayable(RnaFeatureData feat) {
         boolean retVal = false;
         List<CellDescriptor> cells = processor.getColoredCells();
         if (cells.size() > 0) {

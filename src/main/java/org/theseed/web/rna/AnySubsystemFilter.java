@@ -3,7 +3,7 @@
  */
 package org.theseed.web.rna;
 
-import org.theseed.rna.RnaData.FeatureData;
+import org.theseed.rna.RnaFeatureData;
 import org.theseed.web.ColumnProcessor;
 
 /**
@@ -27,7 +27,7 @@ public class AnySubsystemFilter extends RowFilter {
 
 
     @Override
-    public boolean isRowDisplayable(FeatureData feat) {
+    public boolean isRowDisplayable(RnaFeatureData feat) {
         return this.processor.getSubTable().isInSubsystem(feat.getId());
     }
 

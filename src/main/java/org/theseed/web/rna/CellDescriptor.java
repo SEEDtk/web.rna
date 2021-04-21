@@ -15,7 +15,7 @@ public class CellDescriptor {
     // FIELDS
     /** output value */
     private double value;
-    /** rande code */
+    /** range code */
     private int range;
 
     /**

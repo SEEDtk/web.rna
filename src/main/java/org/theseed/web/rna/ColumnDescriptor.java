@@ -10,7 +10,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.TextStringBuilder;
 import org.theseed.reports.LinkObject;
 import org.theseed.rna.RnaData;
-import org.theseed.rna.RnaData.FeatureData;
+import org.theseed.rna.RnaFeatureData;
 import org.theseed.web.Key;
 
 import j2html.tags.ContainerTag;
@@ -70,7 +70,7 @@ public abstract class ColumnDescriptor {
      * @param feat		feature of interest
      * @param colIdx	index of the sample column
      */
-    protected double getWeight(RnaData.FeatureData feat, int colIdx) {
+    protected double getWeight(RnaFeatureData feat, int colIdx) {
         RnaData.Row row = this.getRow(feat);
         RnaData.Weight weight = row.getWeight(colIdx);
         double retVal = 0.0;
@@ -102,7 +102,7 @@ public abstract class ColumnDescriptor {
      *
      * @param feat	feature for the row
      */
-    public RnaData.Row getRow(RnaData.FeatureData feat) {
+    public RnaData.Row getRow(RnaFeatureData feat) {
         return this.data.getRow(feat.getId());
     }
 
@@ -121,7 +121,7 @@ public abstract class ColumnDescriptor {
      *
      * @fid		ID of the feature of interest
      */
-    public abstract double getValue(FeatureData feat);
+    public abstract double getValue(RnaFeatureData feat);
 
     /**
      * @return the title for this column
@@ -143,7 +143,7 @@ public abstract class ColumnDescriptor {
      *
      * @fid		ID of the feature of interest
      */
-    public abstract Key.RevRatio getKey(FeatureData feat);
+    public abstract Key.RevRatio getKey(RnaFeatureData feat);
 
     /**
      * @return the primary sample name
@@ -166,7 +166,8 @@ public abstract class ColumnDescriptor {
         } else if (retVal.isEmpty()) {
             // Here there is ONLY the new column.
             retVal = newColumn;
-        } else if (StringUtils.endsWith(retVal, newColumn)) {
+        } else if (retVal.contentEquals(newColumn) || StringUtils.endsWith(retVal, newColumn) ||
+                StringUtils.contains(retVal, newColumn + COL_SEP_CHAR)) {
             // Here we are repeating the same column.  This is usually a mistake by the user.
         } else {
             // Here we are really adding a new column to existing columns.

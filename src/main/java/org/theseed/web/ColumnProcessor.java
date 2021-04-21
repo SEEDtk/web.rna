@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.theseed.reports.CoreHtmlUtilities;
 import org.theseed.rna.RnaData;
+import org.theseed.rna.RnaFeatureData;
 import org.theseed.subsystems.GenomeSubsystemTable;
 import org.theseed.utils.FloatList;
 import org.theseed.utils.ParseFailureException;
@@ -99,7 +100,7 @@ public class ColumnProcessor extends WebProcessor {
     /** column configuration variable name prefix */
     public static final String COLUMNS_PREFIX = "Columns.";
     /** number of columns before the data section */
-    private static final int HEAD_COLS = 5;
+    private static final int HEAD_COLS = 8;
     /** URL generator for column delete */
     private static final String DELETE_COL_URL_FORMAT = "/rna.cgi/columns?sortCol=%d;deleteCol=%d";
     /** definition for filtering checkboxes */
@@ -176,6 +177,10 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--subsystem", metaVar = "AspaThreModu", usage = "subsystem to highlight")
     protected String subsystem;
 
+    /** TRUE to color columns by baseline */
+    @Option(name = "--baseLineColoring", usage = "if specified, columns will be colored by direction from the baseline")
+    protected boolean baseLineColoring;
+
     @Override
     protected void setWebDefaults() {
         this.sortCol = -2;
@@ -191,6 +196,7 @@ public class ColumnProcessor extends WebProcessor {
         this.rowFilter = RowFilter.Type.ALL;
         this.focusPeg = "";
         this.subsystem = "";
+        this.baseLineColoring = false;
     }
 
     @Override
@@ -223,6 +229,9 @@ public class ColumnProcessor extends WebProcessor {
             Arrays.sort(this.rangeLimits);
         }
         this.rowFilterObject = this.rowFilter.create(this);
+        // If baseline coloring is in effect, we color value columns only.
+        if (this.baseLineColoring)
+            this.colFilter = ColumnQualifierType.VALUE;
         return true;
     }
 
@@ -243,7 +252,7 @@ public class ColumnProcessor extends WebProcessor {
         if (! this.resetFlag) {
             // Here we are not resetting, so we want to keep the old columns.
             String oldCookieString = cookies.get(COLUMNS_PREFIX + this.configuration, "");
-            if (this.sample1.isEmpty()) {
+            if (this.sample1.isEmpty() && this.strategy.requires1()) {
                 // Here no columns are being added.  We add a blank column to clear the sort string.
                 cookieString = ColumnDescriptor.addColumn(oldCookieString, ",");
             } else {
@@ -295,6 +304,9 @@ public class ColumnProcessor extends WebProcessor {
             specs[2] = new ColSpec.Normal("gene");
             specs[3] = new ColSpec.Num("na_len");
             specs[4] = new ColSpec.Normal("subsystems");
+            specs[5] = new ColSpec.Num("ar_num");
+            specs[6] = new ColSpec.Normal("modulons");
+            specs[7] = new ColSpec.Num("baseline");
             for (int i = 0; i < columns.length; i++)
                 specs[i+HEAD_COLS] = this.columnSpec(columns[i], i);
             HtmlTable<MultiKey> table = new HtmlTable<>(specs);
@@ -303,7 +315,7 @@ public class ColumnProcessor extends WebProcessor {
             // Now we create a row for each feature.
             for (RnaData.Row dataRow : this.data) {
                 // Get the feature for this row.
-                RnaData.FeatureData feat = dataRow.getFeat();
+                RnaFeatureData feat = dataRow.getFeat();
                 // Get the sort key for this row.
                 MultiKey rowKey = new MultiKey(feat, sortingColumn);
                 // Build the column descriptors.
@@ -314,8 +326,8 @@ public class ColumnProcessor extends WebProcessor {
                         this.row.add(new CellDescriptor(value, 0));
                     } else {
                         // Here the column is colored.  We need to compute the color.
-                        int color = 0;
-                        while (color < this.rangeLimits.length && value > this.rangeLimits[color]) color++;
+                        int color = this.computeColoring(feat, value);
+                        // Create the cell descriptor.
                         CellDescriptor cell = new CellDescriptor(value, color);
                         this.row.add(cell);
                         this.coloredCells.add(cell);
@@ -352,6 +364,11 @@ public class ColumnProcessor extends WebProcessor {
                     // Check for the highlight subsystem.
                     if (this.subFids.contains(fid))
                         tableRow.highlight(4);
+                    // Next come the regulon and modulon.
+                    tableRow.add(feat.getAtomicRegulon());
+                    tableRow.add(StringUtils.join(feat.getiModulons(), ", "));
+                    // Finally, the baseline.
+                    tableRow.add(feat.getBaseLine());
                     // Now fill in the numbers.
                     for (int i = 0; i < columns.length; i++) {
                         CellDescriptor cell = this.row.get(i);
@@ -377,6 +394,30 @@ public class ColumnProcessor extends WebProcessor {
         DomContent wrapped = this.getPageWriter().highlightBlock(assembly);
         // Write the page.
         this.getPageWriter().writePage("RNA Expression Data", text("RNA Expression Data"), wrapped);
+    }
+
+    /**
+     * This method computes the color for the specified cell value.  This depends on the coloring type.
+     *
+     * @param feat		feature for which the cell is an expression
+     * @param value		value of expression
+     *
+     * @return the color index
+     */
+    private int computeColoring(RnaFeatureData feat, double value) {
+        int retVal = 0;
+        if (this.baseLineColoring) {
+            // Here we have baseline coloring.
+            double base = feat.getBaseLine();
+            if (value <= 0.5 * base)
+                retVal = 3;
+            else if (value >= 2 * base)
+                retVal = 1;
+        } else {
+            // Here we have range-based coloring.
+            while (retVal < this.rangeLimits.length && value > this.rangeLimits[retVal]) retVal++;
+        }
+        return retVal;
     }
 
     /**
@@ -474,6 +515,7 @@ public class ColumnProcessor extends WebProcessor {
         form.addCheckBoxWithDefault("raw", "display raw FPKM numbers", this.rawFlag);
         // Add the coloring controls.
         form.addTextRow("ranges", "Comma-delimited list of range-coloring limits (no spaces)", this.ranges);
+        form.addCheckBoxWithDefault("baseLineColoring", "Use baseline value to compute colors", this.baseLineColoring);
         form.addEnumRow("rowFilter", "Row-filtering rule", this.rowFilter, RowFilter.Type.values());
         form.addEnumRow("colFilter", "Range-coloring rule", this.colFilter, ColumnQualifierType.values());
         // Now the focus peg and the subsystem chooser.
