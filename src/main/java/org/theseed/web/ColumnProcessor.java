@@ -122,6 +122,8 @@ public class ColumnProcessor extends WebProcessor {
     private RowFilter rowFilterObject;
     /** set of features in the focus subsystem */
     private Set<String> subFids;
+    /** TRUE if we are doing baseline coloring (the default) */
+    private boolean baseLineColoring;
 
     // COMMAND-LINE OPTIONS
 
@@ -177,10 +179,6 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--subsystem", metaVar = "AspaThreModu", usage = "subsystem to highlight")
     protected String subsystem;
 
-    /** TRUE to color columns by baseline */
-    @Option(name = "--baseLineColoring", usage = "if specified, columns will be colored by direction from the baseline")
-    protected boolean baseLineColoring;
-
     @Override
     protected void setWebDefaults() {
         this.sortCol = -2;
@@ -196,7 +194,7 @@ public class ColumnProcessor extends WebProcessor {
         this.rowFilter = RowFilter.Type.ALL;
         this.focusPeg = "";
         this.subsystem = "";
-        this.baseLineColoring = false;
+        this.baseLineColoring = true;
     }
 
     @Override
@@ -227,6 +225,7 @@ public class ColumnProcessor extends WebProcessor {
             this.rangeLimits = rangeList.getValues();
             // Sort the range limits from lowest to highest.
             Arrays.sort(this.rangeLimits);
+            this.baseLineColoring = false;
         }
         this.rowFilterObject = this.rowFilter.create(this);
         // If baseline coloring is in effect, we color value columns only.
@@ -515,7 +514,6 @@ public class ColumnProcessor extends WebProcessor {
         form.addCheckBoxWithDefault("raw", "display raw FPKM numbers", this.rawFlag);
         // Add the coloring controls.
         form.addTextRow("ranges", "Comma-delimited list of range-coloring limits (no spaces)", this.ranges);
-        form.addCheckBoxWithDefault("baseLineColoring", "Use baseline value to compute colors", this.baseLineColoring);
         form.addEnumRow("rowFilter", "Row-filtering rule", this.rowFilter, RowFilter.Type.values());
         form.addEnumRow("colFilter", "Range-coloring rule", this.colFilter, ColumnQualifierType.values());
         // Now the focus peg and the subsystem chooser.
