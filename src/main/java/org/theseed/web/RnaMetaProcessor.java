@@ -13,7 +13,7 @@ import static j2html.TagCreator.*;
 
 /**
  * This command displays the meta-data for the RNA sequence samples.  This data is encoded in the sample records
- * of the main RNA data file ("fpkm.ser" in the CoreSEED directory).
+ * of the main RNA data file ("tpm.ser" in the CoreSEED directory).
  *
  * The positional parameters, as always, are the name of the coreSEED data directory and the name of the user workspace.
  *
@@ -21,6 +21,10 @@ import static j2html.TagCreator.*;
  *
  */
 public class RnaMetaProcessor extends WebProcessor {
+
+    // FIELDS
+    /** length of E coli genome */
+    private static final int GENOME_LEN = 4638920;
 
     @Override
     protected void setWebDefaults() {
@@ -45,12 +49,14 @@ public class RnaMetaProcessor extends WebProcessor {
         // Create a table for the meta-data.
         HtmlTable<Key.Null> table = new HtmlTable<>(new ColSpec.Normal("sample_id"), new ColSpec.Fraction("Thr g/l"),
                 new ColSpec.Num("OD"), new ColSpec.Normal("original_name"), new ColSpec.Num("reads"), new ColSpec.Num("size"),
-                new ColSpec.Num("pct_qual"), new ColSpec.Normal("process_date"));
+                new ColSpec.Num("pct_qual"), new ColSpec.Normal("process_date"), new ColSpec.Num("avg_read_len"),
+                new ColSpec.Num("coverage"), new ColSpec.Num("pct_expressed"));
         // Run through the samples, adding rows.
         for (RnaData.JobData sample : data.getSamples()) {
             new Row<Key.Null>(table, Key.NONE).add(sample.getName()).add(sample.getProduction())
                     .add(sample.getOpticalDensity()).add(sample.getOldName()).add(sample.getReadCount())
-                    .add(sample.getBaseCount()).add(sample.getQuality()).add(sample.getProcessingDate().toString());
+                    .add(sample.getBaseCount()).add(sample.getQuality()).add(sample.getProcessingDate().toString())
+                    .add(sample.getMeanReadLen()).add(sample.getCoverage(GENOME_LEN)).add(sample.getExpressedPercent(data));
         }
         DomContent tableHtml = this.getPageWriter().highlightBlock(table.output());
         this.getPageWriter().writePage("RNA Seq Metadata", text("Table of Samples"), tableHtml);
