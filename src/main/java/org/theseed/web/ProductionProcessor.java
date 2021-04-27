@@ -4,11 +4,13 @@
 package org.theseed.web;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -65,6 +67,7 @@ import static j2html.TagCreator.*;
  * --compare	fragment for comparison
  * --saved		name of a configuration (or 1 for default): use saved parameter values for filters (no filters may be specified)
  * --store		name of a configuration in which to store the current one
+ * --source		name of prediction file to load
  *
  * @author Bruce Parrello
  *
@@ -90,6 +93,8 @@ public class ProductionProcessor extends WebProcessor {
     private IProductionTable tableBuilder;
     /** configuration message */
     private String configMessage;
+    /** map of source types to source files */
+    private Map<String, String> sourceMap;
 
     // COMMAND-LINE OPTIONS
 
@@ -152,6 +157,10 @@ public class ProductionProcessor extends WebProcessor {
     @Option(name = "--sortCol", usage = "index of column to sort on")
     protected int sortCol;
 
+    /** file of predictions to load */
+    @Option(name = "--source", usage = "name of file to load")
+    protected String source;
+
     @Override
     protected void setWebDefaults() {
         this.f1 = new ArrayList<String>();
@@ -169,6 +178,7 @@ public class ProductionProcessor extends WebProcessor {
         this.restoreFilters = null;
         this.sortCol = 1;
         this.storeConfig = null;
+        this.source = "thrall.production.tbl";
     }
 
     @Override
@@ -179,6 +189,10 @@ public class ProductionProcessor extends WebProcessor {
         this.filters = Arrays.asList(this.f1, this.f2, this.f3, this.f4, this.f5, this.f6, this.f7, this.f8);
         // Initialize the choice list to empty sets all across the board.
         this.choices = IntStream.range(0, filters.size()).mapToObj(x -> new TreeSet<String>()).collect(Collectors.toList());
+        // Get the map of source types to files.
+        this.sourceMap = TabbedLineReader.readMap(new File(this.getCoreDir(), "map.production.tbl"), "description", "value");
+        if (! this.sourceMap.values().contains(this.source))
+            throw new FileNotFoundException("Invalid data source specified.");
         return true;
     }
 
@@ -233,7 +247,7 @@ public class ProductionProcessor extends WebProcessor {
         // Insure delete-nothing is a choice for the delete column.
         this.choices.get(SampleId.DELETE_COL).add("000");
         // Read the production file.
-        File prodFile = new File(this.getCoreDir(), "thrall.production.tbl");
+        File prodFile = new File(this.getCoreDir(), this.source);
         try (TabbedLineReader prodStream = new TabbedLineReader(prodFile)) {
             int sampleCol = prodStream.findField("sample_id");
             int predCol = prodStream.findField("predicted");
@@ -360,6 +374,8 @@ public class ProductionProcessor extends WebProcessor {
         }
         comparisons.addAll(this.choices.get(SampleId.DELETE_COL).stream().map(x -> "D" + x).collect(Collectors.toList()));
         retVal.addChoiceRow("compare", "Comparison Attribute", this.compare, comparisons);
+        // Specify the source map.
+        retVal.addMapRow("source", "Predictions to Display", this.sourceMap, this.source);
         // Add the configuration status message.
         retVal.addMessageRow(p(join(this.configMessage, this.commandLink("Manage configurations", "rna", "predManage"))));
         // Add the save options.
