@@ -305,7 +305,8 @@ public class ColumnProcessor extends WebProcessor {
             specs[4] = new ColSpec.Normal("subsystems");
             specs[5] = new ColSpec.Num("ar_num");
             specs[6] = new ColSpec.Normal("modulons");
-            specs[7] = new ColSpec.Num("baseline");
+            specs[7] = new ColSpec.Normal("operon");
+            specs[8] = new ColSpec.Num("baseline");
             for (int i = 0; i < columns.length; i++)
                 specs[i+HEAD_COLS] = this.columnSpec(columns[i], i);
             HtmlTable<MultiKey> table = new HtmlTable<>(specs);
@@ -363,9 +364,10 @@ public class ColumnProcessor extends WebProcessor {
                     // Check for the highlight subsystem.
                     if (this.subFids.contains(fid))
                         tableRow.highlight(4);
-                    // Next come the regulon and modulon.
+                    // Next come the regulon, modulon, and operon.
                     tableRow.add(feat.getAtomicRegulon());
                     tableRow.add(StringUtils.join(feat.getiModulons(), ", "));
+                    tableRow.add(feat.getOperon());
                     // Finally, the baseline.
                     tableRow.add(feat.getBaseLine());
                     // Now fill in the numbers.
