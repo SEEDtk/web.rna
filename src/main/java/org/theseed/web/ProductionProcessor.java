@@ -29,6 +29,7 @@ import org.theseed.utils.ParseFailureException;
 import org.theseed.web.rna.IProductionTable;
 import org.theseed.web.rna.ProductionCompareTable;
 import org.theseed.web.rna.ProductionDeleteTable;
+import org.theseed.web.rna.ProductionInsertTable;
 import org.theseed.web.rna.ProductionDisplayTable;
 
 import j2html.tags.DomContent;
@@ -242,6 +243,8 @@ public class ProductionProcessor extends WebProcessor {
             this.tableBuilder = new ProductionCompareTable(this, compareIdx, this.filters.get(compareIdx));
         else if (this.compare.charAt(0) == 'D')
             this.tableBuilder = new ProductionDeleteTable(this, this.compare.substring(1));
+        else if (this.compare.charAt(0) == 'I')
+            this.tableBuilder = new ProductionInsertTable(this, this.compare.substring(1));
         else
             this.tableBuilder = new ProductionDisplayTable(this);
         // Insure delete-nothing is a choice for the delete column.
@@ -260,21 +263,22 @@ public class ProductionProcessor extends WebProcessor {
                 // Update the choice lists and determine if we are keeping this sample.
                 boolean keep = true;
                 for (int i = 0; i < FRAGMENT_TITLES.length; i++) {
-                    if (i != SampleId.DELETE_COL) {
+                    if (i == SampleId.DELETE_COL || i == SampleId.INSERT_COL) {
+                        // For inserts or deletes, we check for the nothing case, and otherwise insure the
+                        // selected choice is in the filtered items list.
+                        Set<String> mods = sample.getDeletes();
+                        Collection<String> filter = this.filters.get(i);
+                        this.choices.get(i).addAll(mods);
+                        if (mods.isEmpty()) {
+                            if (! filter.contains("000"))
+                                keep = false;
+                        } else if (filter.stream().allMatch(x -> ! mods.contains(x)))
+                            keep = false;
+                    } else {
+                        // Here we have a normal fragment.
                         String fragment = sample.getFragment(i);
                         this.choices.get(i).add(fragment);
                         if (! this.filters.get(i).contains(fragment))
-                            keep = false;
-                    } else {
-                        // For deletes, if nothing was deleted, we check for the nothing case being in the filter.
-                        // If something was deleted, it must be one of the filtered items.
-                        Set<String> deletes = sample.getDeletes();
-                        Collection<String> filter = this.filters.get(SampleId.DELETE_COL);
-                        this.choices.get(SampleId.DELETE_COL).addAll(deletes);
-                        if (deletes.isEmpty()) {
-                            if (! filter.contains("000"))
-                                keep = false;
-                        } else if (filter.stream().allMatch(x -> ! deletes.contains(x)))
                             keep = false;
                     }
                 }
@@ -366,12 +370,14 @@ public class ProductionProcessor extends WebProcessor {
         retVal.addTextRow("minPred", "Minimum prediction to display", Double.toString(this.minPred));
         retVal.addTextRow("maxPred", "Maximum prediction to display", Double.toString(this.maxPred));
         // Specify the comparison column.
-        List<String> comparisons = new ArrayList<String>(FRAGMENT_TITLES.length + this.choices.get(SampleId.DELETE_COL).size() + 1);
+        List<String> comparisons = new ArrayList<String>(FRAGMENT_TITLES.length + this.choices.get(SampleId.DELETE_COL).size()
+                + this.choices.get(SampleId.INSERT_COL).size() + 1);
         comparisons.add("(none)");
         for (int i = 0; i < FRAGMENT_TITLES.length; i++) {
-            if (i != SampleId.DELETE_COL)
+            if (i != SampleId.DELETE_COL && i != SampleId.INSERT_COL)
                 comparisons.add(FRAGMENT_TITLES[i]);
         }
+        comparisons.addAll(this.choices.get(SampleId.INSERT_COL).stream().map(x -> "I" + x).collect(Collectors.toList()));
         comparisons.addAll(this.choices.get(SampleId.DELETE_COL).stream().map(x -> "D" + x).collect(Collectors.toList()));
         retVal.addChoiceRow("compare", "Comparison Attribute", this.compare, comparisons);
         // Specify the source map.
