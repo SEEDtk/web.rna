@@ -51,10 +51,12 @@ public abstract class ColumnDescriptor {
         String[] parts = StringUtils.split(saveString, ',');
         // Create the descriptor.
         ColumnDescriptor retVal = null;
-        if (parts.length > 1)
-            retVal = new DifferentialColumnDescriptor(parts[1]);
-        else
+        if (parts.length <= 1)
             retVal = new SimpleColumnDescriptor();
+        else if (parts[1].contentEquals("baseline"))
+            retVal = new BaselineColumnDescriptor();
+        else
+            retVal = new DifferentialColumnDescriptor(parts[1]);
         // Fill in the constant data.
         retVal.sample1 = parts[0];
         retVal.data = data;

@@ -28,6 +28,8 @@ public class ProductionDisplayTable implements IProductionTable {
     private HtmlTable<Key.RevFloat> table;
     /** prediction/actual error tracker */
     private SummaryStatistics tracker;
+    /** sample counter */
+    private int counter;
     /** web processor for generating links */
     private WebProcessor processor;
 
@@ -36,11 +38,13 @@ public class ProductionDisplayTable implements IProductionTable {
                 new ColSpec.Fraction("Actual"), new ColSpec.Fraction("Growth"));
         this.tracker = new SummaryStatistics();
         this.processor = processor;
+        this.counter = 0;
     }
 
     @Override
     public void recordSample(SampleId sample, double production, double actual, double growth) {
         String sampleName = sample.toString();
+        this.counter++;
         DomContent sampleLink = this.processor.commandLink(sampleName, "rna", "sample", "sample=" + sampleName)
                 .withTarget("_blank");
         Row<Key.RevFloat> row = new Row<Key.RevFloat>(this.table, new Key.RevFloat(production))
@@ -63,10 +67,10 @@ public class ProductionDisplayTable implements IProductionTable {
         DomContent retVal;
         int n = (int) this.tracker.getN();
         if (n == 0)
-            retVal = p("No actual results were found in this set.");
+            retVal = p(String.format("No actual results were found in this set of %d samples.", this.counter));
         else
-            retVal = p(String.format("%d actual results in this set.  Mean error is %g, stdev %g.", n, this.tracker.getMean(),
-                    this.tracker.getStandardDeviation()));
+            retVal = p(String.format("%d actual results in this set of %d samples.  Mean error is %g, stdev %g.",
+                    n, this.counter, this.tracker.getMean(), this.tracker.getStandardDeviation()));
         return retVal;
     }
 

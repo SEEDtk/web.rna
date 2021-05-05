@@ -247,8 +247,9 @@ public class ProductionProcessor extends WebProcessor {
             this.tableBuilder = new ProductionInsertTable(this, this.compare.substring(1));
         else
             this.tableBuilder = new ProductionDisplayTable(this);
-        // Insure delete-nothing is a choice for the delete column.
+        // Insure delete-nothing is a choice for the insert and delete columns.
         this.choices.get(SampleId.DELETE_COL).add("000");
+        this.choices.get(SampleId.INSERT_COL).add("000");
         // Read the production file.
         File prodFile = new File(this.getCoreDir(), this.source);
         try (TabbedLineReader prodStream = new TabbedLineReader(prodFile)) {
@@ -263,17 +264,15 @@ public class ProductionProcessor extends WebProcessor {
                 // Update the choice lists and determine if we are keeping this sample.
                 boolean keep = true;
                 for (int i = 0; i < FRAGMENT_TITLES.length; i++) {
-                    if (i == SampleId.DELETE_COL || i == SampleId.INSERT_COL) {
-                        // For inserts or deletes, we check for the nothing case, and otherwise insure the
+                    if (i == SampleId.DELETE_COL) {
+                        // For deletes, we check for the nothing case, and otherwise insure the
                         // selected choice is in the filtered items list.
                         Set<String> mods = sample.getDeletes();
-                        Collection<String> filter = this.filters.get(i);
-                        this.choices.get(i).addAll(mods);
-                        if (mods.isEmpty()) {
-                            if (! filter.contains("000"))
-                                keep = false;
-                        } else if (filter.stream().allMatch(x -> ! mods.contains(x)))
-                            keep = false;
+                        keep = processChoiceColumn(keep, i, mods);
+                    } else if (i == SampleId.INSERT_COL) {
+                        // Inserts are similar to deletes.
+                        Set<String> mods = sample.getInserts();
+                        keep = processChoiceColumn(keep, i, mods);
                     } else {
                         // Here we have a normal fragment.
                         String fragment = sample.getFragment(i);
@@ -320,6 +319,26 @@ public class ProductionProcessor extends WebProcessor {
     }
 
     /**
+     * Compare a set of inserts/deletes to the appropriate filters.
+     *
+     * @param keep		incoming keep indicator
+     * @param i			column index
+     * @param mods		set of inserts/deletes
+     *
+     * @return TRUE if the sample should be kept, else FALSE
+     */
+    public boolean processChoiceColumn(boolean keep, int i, Set<String> mods) {
+        Collection<String> filter = this.filters.get(i);
+        this.choices.get(i).addAll(mods);
+        if (mods.isEmpty()) {
+            if (! filter.contains("000"))
+                keep = false;
+        } else if (filter.stream().allMatch(x -> ! mods.contains(x)))
+            keep = false;
+        return keep;
+    }
+
+    /**
      * @return the cookie file name for a configuration
      *
      * @param configName	configuration name whose file is desired
@@ -363,7 +382,7 @@ public class ProductionProcessor extends WebProcessor {
     private DomContent createForm() throws IOException {
         HtmlForm retVal = new HtmlForm("rna", "production", this);
         // Create the main filter.
-        retVal.addFilterBox("sampleFilter", "Sample ID filtering", FRAGMENT_NAMES, FRAGMENT_TITLES, this.choices, this.filters);
+        retVal.addFilterBox("sampleFilter", "Sample ID filtering (click on column head to set/clear a column)", FRAGMENT_NAMES, FRAGMENT_TITLES, this.choices, this.filters);
         // Create the real-only flag.
         retVal.addCheckBoxWithDefault("real", "Only show samples with real values", this.realOnly);
         // Specify the prediction limits.

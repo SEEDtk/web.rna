@@ -100,7 +100,7 @@ public class ColumnProcessor extends WebProcessor {
     /** column configuration variable name prefix */
     public static final String COLUMNS_PREFIX = "Columns.";
     /** number of columns before the data section */
-    private static final int HEAD_COLS = 8;
+    private static final int HEAD_COLS = 9;
     /** URL generator for column delete */
     private static final String DELETE_COL_URL_FORMAT = "/rna.cgi/columns?sortCol=%d;deleteCol=%d";
     /** definition for filtering checkboxes */
@@ -131,7 +131,7 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--sample1", usage = "primary sample name")
     protected String sample1;
 
-    /** name of secondary sample (if none, column is not differential) */
+    /** name of secondary sample (if none, column is not differential, if "baseline", column is sample over baseline) */
     @Option(name = "--sample2", usage = "secondary sample name")
     protected String sample2;
 
