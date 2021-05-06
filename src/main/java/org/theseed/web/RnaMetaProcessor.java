@@ -6,6 +6,7 @@ package org.theseed.web;
 import java.io.File;
 import java.io.IOException;
 
+import org.theseed.reports.PageWriter;
 import org.theseed.rna.RnaData;
 
 import j2html.tags.DomContent;
@@ -24,7 +25,7 @@ public class RnaMetaProcessor extends WebProcessor {
 
     // FIELDS
     /** length of E coli genome */
-    private static final int GENOME_LEN = 4638920;
+    public static final int GENOME_LEN = 4638920;
 
     @Override
     protected void setWebDefaults() {
@@ -47,19 +48,27 @@ public class RnaMetaProcessor extends WebProcessor {
         RnaData data = RnaData.load(dataFile);
         log.info("{} samples in RNA dataset {}.", data.size(), dataFile);
         // Create a table for the meta-data.
-        HtmlTable<Key.Null> table = new HtmlTable<>(new ColSpec.Normal("sample_id"), new ColSpec.Fraction("Thr g/l"),
-                new ColSpec.Num("OD"), new ColSpec.Normal("original_name"), new ColSpec.Num("reads"), new ColSpec.Num("size"),
-                new ColSpec.Num("pct_qual"), new ColSpec.Normal("process_date"), new ColSpec.Num("avg_read_len"),
-                new ColSpec.Num("coverage"), new ColSpec.Num("pct_expressed"));
-        // Run through the samples, adding rows.
+        HtmlTable<Key.Null> table = new HtmlTable<>(new ColSpec.Normal("sel"), new ColSpec.Normal("sample_id"),
+                new ColSpec.Fraction("Thr g/l"), new ColSpec.Num("OD"), new ColSpec.Normal("original_name"),
+                new ColSpec.Num("reads"), new ColSpec.Num("size"), new ColSpec.Num("pct_qual"),
+                new ColSpec.Normal("process_date"), new ColSpec.Num("avg_read_len"), new ColSpec.Num("coverage"),
+                new ColSpec.Num("pct_expressed"));
+        // Run through the samples, adding rows.  Note the first column contains a checkbox.
         for (RnaData.JobData sample : data.getSamples()) {
-            new Row<Key.Null>(table, Key.NONE).add(sample.getName()).add(sample.getProduction())
+            new Row<Key.Null>(table, Key.NONE).add(input().withType("checkbox").withName("sample1").withValue(sample.getName()))
+                    .add(sample.getName()).add(sample.getProduction())
                     .add(sample.getOpticalDensity()).add(sample.getOldName()).add(sample.getReadCount())
                     .add(sample.getBaseCount()).add(sample.getQuality()).add(sample.getProcessingDate().toString())
                     .add(sample.getMeanReadLen()).add(sample.getCoverage(GENOME_LEN)).add(sample.getExpressedPercent(data));
         }
-        DomContent tableHtml = this.getPageWriter().highlightBlock(table.output());
-        this.getPageWriter().writePage("RNA Seq Metadata", text("Table of Samples"), tableHtml);
+        // Get the page writer, and format the table as a form.
+        PageWriter writer = this.getPageWriter();
+        DomContent submitForm = form().withMethod("POST")
+                .withAction(this.commandUrl("rna", "columns"))
+                .withClass("web").with(p(join("Add checked samples to RNA Seq page.", input().withType("submit"))))
+                .with(table.output());
+        DomContent tableHtml = this.getPageWriter().highlightBlock(submitForm);
+        writer.writePage("RNA Seq Metadata", text("Table of Samples"), tableHtml);
     }
 
 }

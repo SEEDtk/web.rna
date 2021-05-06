@@ -64,6 +64,8 @@ import static j2html.TagCreator.*;
  *
  * --sample1	name of the primary sample for the next column
  * --sample2	name of the secondary sample (optional)
+ * --samplei	name of a sample to display (optional); more than one of these can be specified, and they act as
+ * 				additional values to sample1
  * --sortCol	index of the column to sort on
  * --deleteCol	index of a column to delete
  * --reset		erase all of the saved columns (this automatically changes sortCol to 1)
@@ -129,7 +131,7 @@ public class ColumnProcessor extends WebProcessor {
 
     /** name of primary sample (if none, no column is added) */
     @Option(name = "--sample1", usage = "primary sample name")
-    protected String sample1;
+    protected List<String> sample1;
 
     /** name of secondary sample (if none, column is not differential, if "baseline", column is sample over baseline) */
     @Option(name = "--sample2", usage = "secondary sample name")
@@ -183,7 +185,7 @@ public class ColumnProcessor extends WebProcessor {
     protected void setWebDefaults() {
         this.sortCol = -2;
         this.deleteCol = -1;
-        this.sample1 = "";
+        this.sample1 = new ArrayList<String>();
         this.sample2 = "";
         this.resetFlag = false;
         this.rawFlag = false;
@@ -209,9 +211,11 @@ public class ColumnProcessor extends WebProcessor {
             throw new RuntimeException("Class not found: " + e.getMessage());
         }
         // Verify the samples.
-        if (! this.sample1.isEmpty() && this.data.getColIdx(this.sample1) < 0)
-            throw new ParseFailureException("Invalid sample name " + this.sample1 + ".");
-        if (! this.sample2.isEmpty() && this.data.getColIdx(this.sample2) < 0)
+        for (String samplei : this.sample1) {
+            if (! samplei.isEmpty() && this.data.getColIdx(samplei) < 0)
+                throw new ParseFailureException("Invalid sample name " + samplei + ".");
+        }
+        if (! this.sample2.isEmpty() && ! this.sample2.contentEquals("baseline") && this.data.getColIdx(this.sample2) < 0)
             throw new ParseFailureException("Invalid sample name " + this.sample2 + ".");
         // Verify the ranges.
         if (this.ranges.isEmpty()) {
@@ -504,7 +508,7 @@ public class ColumnProcessor extends WebProcessor {
         form.createDataList(samples0, SAMPLE_NAME_LIST);
         // Create the sample selectors.
         form.addSearchRow("sample1", "Primary RNA Sampling", "", SAMPLE_NAME_LIST);
-        form.addSearchRow("sample2", "Optional Denominator Sample", "", SAMPLE_NAME_LIST);
+        form.addSearchRow("sample2", "Optional Denominator Sample (or \"baseline\")", "", SAMPLE_NAME_LIST);
         // Add the sort column specifier.
         List<String> sortCols = Arrays.stream(columns).map(x -> x.getTitleString()).collect(Collectors.toList());
         String defaultCol = (sortCols.size() > 0 && this.sortCol >= 0 ? sortCols.get(this.sortCol) : null);

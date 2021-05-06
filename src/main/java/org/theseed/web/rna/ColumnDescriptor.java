@@ -12,6 +12,7 @@ import org.theseed.reports.LinkObject;
 import org.theseed.rna.RnaData;
 import org.theseed.rna.RnaFeatureData;
 import org.theseed.web.Key;
+import org.theseed.web.RnaMetaProcessor;
 
 import j2html.tags.ContainerTag;
 import j2html.tags.DomContent;
@@ -213,6 +214,8 @@ public abstract class ColumnDescriptor {
         }
         if (retVal.length() == 0)
             retVal.append("No production.");
+        retVal.append("  coverage %4.2f. pct_qual %4.2f.", sample.getCoverage(RnaMetaProcessor.GENOME_LEN),
+                sample.getQuality());
         return retVal.toString();
     }
 

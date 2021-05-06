@@ -14,13 +14,14 @@ import java.util.SortedMap;
  */
 public class TimeBothNewColumnCreator extends NewColumnCreator {
 
-    public TimeBothNewColumnCreator(String samp1, String samp2, List<String> samps) {
+    public TimeBothNewColumnCreator(List<String> samp1, String samp2, List<String> samps) {
         super(samp1, samp2, samps);
     }
 
     @Override
     public List<String> getNewColumns() {
-        SortedMap<String, String> samp1Map = this.getAllTimes(this.getSample1());
+        String samp1 = this.getOnlySample1();
+        SortedMap<String, String> samp1Map = this.getAllTimes(samp1);
         if (this.getSample2().isEmpty())
             throw new IllegalArgumentException("Cannot use time-series comparison mode without a second sample ID.");
         Map<String, String> samp2Map = this.getAllTimes(this.getSample2());

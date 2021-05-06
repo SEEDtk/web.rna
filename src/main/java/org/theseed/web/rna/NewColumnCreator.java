@@ -38,11 +38,11 @@ public abstract class NewColumnCreator {
         /**
          * Create a new-column creation object for this strategy.
          *
-         * @param samp1	ID of first sample
+         * @param samp1	IDs of first samples
          * @param samp2	ID of second sample
          * @param samps	list of samples
          */
-        public NewColumnCreator create(String samp1, String samp2, List<String> samps) {
+        public NewColumnCreator create(List<String> samp1, String samp2, List<String> samps) {
             NewColumnCreator retVal = null;
             switch (this) {
             case TIME1 :
@@ -76,8 +76,8 @@ public abstract class NewColumnCreator {
     }
 
     // FIELDS
-    /** ID of the first sample */
-    private String sample1;
+    /** IDs of the first samples */
+    private List<String> sample1;
     /** ID of the second sample */
     private String sample2;
     /** list of samples */
@@ -88,11 +88,11 @@ public abstract class NewColumnCreator {
     /**
      * Construct a new column creator.
      *
-     * @param samp1	ID of first sample
+     * @param samp1	IDs of first samples
      * @param samp2	ID of second sample
      * @param samps	list of samples
      */
-    public NewColumnCreator(String samp1, String samp2, List<String> samps) {
+    public NewColumnCreator(List<String> samp1, String samp2, List<String> samps) {
         this.sample1 = samp1;
         this.sample2 = samp2;
         this.samples = samps;
@@ -120,10 +120,19 @@ public abstract class NewColumnCreator {
     }
 
     /**
-     * @return the first sample's ID
+     * @return the primary sample IDs
      */
-    protected String getSample1() {
+    protected List<String> getSample1() {
         return this.sample1;
+    }
+
+    /**
+     * @return the primary sample ID when only one is allowed
+     */
+    protected String getOnlySample1() {
+        if (this.sample1.size() != 1)
+            throw new RuntimeException("Only one primary sample can be specified for this column-creation mode.");
+        return this.sample1.get(0);
     }
 
     /**

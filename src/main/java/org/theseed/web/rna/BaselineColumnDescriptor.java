@@ -3,10 +3,13 @@
  */
 package org.theseed.web.rna;
 
+import org.apache.commons.lang3.StringUtils;
 import org.theseed.rna.RnaFeatureData;
+import org.theseed.web.Key;
 import org.theseed.web.Key.RevRatio;
 
 import j2html.tags.DomContent;
+import static j2html.TagCreator.*;
 
 /**
  * This column class displays a column based on the ratio of a sample's expression to the baseline values.
@@ -16,40 +19,46 @@ import j2html.tags.DomContent;
  */
 public class BaselineColumnDescriptor extends ColumnDescriptor {
 
+    // FIELDS
+    /** column being displayed as the numerator */
+    private int colIdx;
+
     @Override
     protected boolean init() {
-        // TODO Auto-generated method stub
-        return false;
+        this.colIdx = this.getColIdx(this.getSample1());
+        return (this.colIdx >= 0);
     }
 
     @Override
     public double getValue(RnaFeatureData feat) {
-        // TODO Auto-generated method stub
-        return 0;
+        double num = this.getWeight(feat, this.colIdx);
+        double retVal = num / feat.getBaseLine();
+        return retVal;
     }
 
     @Override
     public DomContent getTitle() {
-        // TODO Auto-generated method stub
-        return null;
+        DomContent retVal = join(this.computeName(this.colIdx), " / baseline");
+        return retVal;
     }
 
     @Override
     public String getTitleString() {
-        // TODO Auto-generated method stub
-        return null;
+         String retVal = this.getSample(this.colIdx).getName() + " / baseline";
+         retVal = StringUtils.replaceChars(retVal, '_', ' ');
+         return retVal;
     }
 
     @Override
     public String getTooltip() {
-        // TODO Auto-generated method stub
-        return null;
+        return this.tipStringOf(this.colIdx);
     }
 
     @Override
     public RevRatio getKey(RnaFeatureData feat) {
-        // TODO Auto-generated method stub
-        return null;
+        double dem = feat.getBaseLine();
+        double num = this.getWeight(feat, this.colIdx);
+        return new Key.RevRatio(num, dem);
     }
 
 }
