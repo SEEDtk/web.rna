@@ -78,6 +78,7 @@ import static j2html.TagCreator.*;
  * --rowFilter	rule to use for difference filter; DIFFERENT, NONE
  * --focus		if specified, the ID of a peg; the screen will scroll to that peg
  * --subsystem	subsystem to color
+ * --group		focus operon/regulon/modulon group for group filtering
  *
  * @author Bruce Parrello
  *
@@ -112,6 +113,10 @@ public class ColumnProcessor extends WebProcessor {
     private static final String SELECTOR_FORMAT = "sampleFilter%d";
     /** name of the sample-name datalist */
     private static final String SAMPLE_NAME_LIST = "sampleNameList";
+    /** name of the filter-group datalist */
+    private static final String FILTER_GROUP_LIST = "filterGroupList";
+    /** name of the subsystem datalist */
+    private static final String SUBSYSTEM_LIST = "subsystemFocusList";
     /** array of range limits; each array entry is the exclusive upper limit for the range */
     private double[] rangeLimits;
     /** cell descriptors for the current row */
@@ -126,6 +131,9 @@ public class ColumnProcessor extends WebProcessor {
     private Set<String> subFids;
     /** TRUE if we are doing baseline coloring (the default) */
     private boolean baseLineColoring;
+    /** list of all possible filter groups */
+    private Set<String> filterGroupList;
+
 
     // COMMAND-LINE OPTIONS
 
@@ -180,6 +188,10 @@ public class ColumnProcessor extends WebProcessor {
     /** subsystem to color */
     @Option(name = "--subsystem", metaVar = "AspaThreModu", usage = "subsystem to highlight")
     protected String subsystem;
+
+    /** group for row filtering */
+    @Option(name = "--group", metaVar = "AR2", usage = "operon/modulon/regulon group for row filtering")
+    protected String filterGroup;
 
     @Override
     protected void setWebDefaults() {
@@ -248,6 +260,8 @@ public class ColumnProcessor extends WebProcessor {
         // Get the subsystem table.
         File subFile = new File(this.getCoreDir(), "rnaSubs.txt");
         this.subTable = new GenomeSubsystemTable(subFile);
+        // Create the filter group list.
+        this.filterGroupList = new TreeSet<String>();
         // Create the list of samples.
         this.samples = this.data.getSamples().stream().map(x -> x.getName()).collect(Collectors.toList());
         // Build the cookie string describing all the columns.
@@ -368,10 +382,13 @@ public class ColumnProcessor extends WebProcessor {
                     // Check for the highlight subsystem.
                     if (this.subFids.contains(fid))
                         tableRow.highlight(4);
-                    // Next come the regulon, modulon, and operon.
+                    // Next come the regulon, modulon, and operon.  These need to be added to the filter group list.
                     tableRow.add(feat.getAtomicRegulon());
+                    this.filterGroupList.add(String.format("AR%d", feat.getAtomicRegulon()));
                     tableRow.add(StringUtils.join(feat.getiModulons(), ", "));
+                    Arrays.stream(feat.getiModulons()).forEach(x -> this.filterGroupList.add(x));;
                     tableRow.add(feat.getOperon());
+                    this.filterGroupList.add(feat.getOperon());
                     // Finally, the baseline.
                     tableRow.add(feat.getBaseLine());
                     // Now fill in the numbers.
@@ -504,8 +521,12 @@ public class ColumnProcessor extends WebProcessor {
         // Get the list of samples and add the null selection.
         List<String> samples0 = new ArrayList<String>(this.samples);
         samples0.add("");
-        // Create the sample data list.
+        // Create the data lists.
         form.createDataList(samples0, SAMPLE_NAME_LIST);
+        List<String> subsystemList = new ArrayList<String>(this.subTable.getAllSubsystems());
+        subsystemList.add("");
+        form.createDataList(subsystemList, SUBSYSTEM_LIST);
+        form.createDataList(this.filterGroupList, FILTER_GROUP_LIST);
         // Create the sample selectors.
         form.addSearchRow("sample1", "Primary RNA Sampling", "", SAMPLE_NAME_LIST);
         form.addSearchRow("sample2", "Optional Denominator Sample (or \"baseline\")", "", SAMPLE_NAME_LIST);
@@ -522,9 +543,10 @@ public class ColumnProcessor extends WebProcessor {
         form.addTextRow("ranges", "Comma-delimited list of range-coloring limits (no spaces)", this.ranges);
         form.addEnumRow("rowFilter", "Row-filtering rule", this.rowFilter, RowFilter.Type.values());
         form.addEnumRow("colFilter", "Range-coloring rule", this.colFilter, ColumnQualifierType.values());
-        // Now the focus peg and the subsystem chooser.
+        // Now the focus peg, the subsystem chooser, and the filtering group.
         form.addTextRow("focus", "Focus Peg", this.focusPeg);
-        form.addChoiceRow("subsystem", "Subsystem to highlight", this.subsystem, this.subTable.getAllSubsystems(), "");
+        form.addSearchRow("subsystem", "Subsystem to highlight", this.subsystem, SUBSYSTEM_LIST);
+        form.addSearchRow("group", "Operon/modulon/regulon group for filtering", "", FILTER_GROUP_LIST);
         // Add a hidden field to maintain the configuration name.
         form.addHidden("name", this.configuration);
         // Now create the load form.
@@ -625,6 +647,13 @@ public class ColumnProcessor extends WebProcessor {
      */
     public GenomeSubsystemTable getSubTable() {
         return this.subTable;
+    }
+
+    /**
+     * @return the filtering group
+     */
+    public String getFilterGroup() {
+        return this.filterGroup;
     }
 
 }

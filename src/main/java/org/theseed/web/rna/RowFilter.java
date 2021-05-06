@@ -16,6 +16,17 @@ import org.theseed.web.ColumnProcessor;
 public abstract class RowFilter {
 
     public static enum Type implements IDescribable {
+        GROUP {
+            @Override
+            public RowFilter create(ColumnProcessor processor) {
+                return new GroupRowFilter(processor);
+            }
+
+            @Override
+            public String getDescription() {
+                return "Only show rows in the filtering group.";
+            }
+        },
         VARIANT {
             @Override
             public RowFilter create(ColumnProcessor processor) {
