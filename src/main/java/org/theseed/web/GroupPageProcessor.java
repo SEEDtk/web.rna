@@ -247,7 +247,7 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
                     // Column 1 is the feature ID, linked to PATRIC.
                     row.add(this.baseGenome.featureLink(fid));
                     // Column 2 is the function.
-                    row.add(feat.getPegFunction());
+                    row.add(a(feat.getPegFunction()).withHref("/html/align2.html#peg_" + StringUtils.substringAfterLast(fid, ".")));
                     // Column 3 is the group list.
                     row.add(this.createGroupList(StringUtils.split(featureSpec[1], ',')));
                     // Column 4 is the base genome.
