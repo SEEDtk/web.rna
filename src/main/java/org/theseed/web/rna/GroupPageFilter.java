@@ -35,6 +35,11 @@ public abstract class GroupPageFilter {
          */
         public BitSet getColumns();
 
+        /**
+         * @return the region of interest
+         */
+        public int getRegionIndex();
+
     }
 
     /**

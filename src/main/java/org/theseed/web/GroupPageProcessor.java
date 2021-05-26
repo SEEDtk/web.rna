@@ -23,6 +23,7 @@ import org.theseed.genome.Feature;
 import org.theseed.genome.Genome;
 import org.theseed.io.LineReader;
 import org.theseed.reports.HtmlUtilities;
+import org.theseed.utils.IDescribable;
 import org.theseed.utils.ParseFailureException;
 import org.theseed.web.rna.GroupPageFilter;
 
@@ -49,9 +50,10 @@ import static j2html.TagCreator.*;
  * --title		display title for the group, with spaces converted to underscores
  * --genome		name of the base genome; the default is "MG1655-wild.gto"
  * --groupFile	name of the group file; the default is "groups.snips.tbl"
- * --type		filtering criterion (ALL, ANY, GROUP)
+ * --filterType	filtering criterion (ALL, ANY, GROUP)
  * --genomes	list of IDs of genomes to display
- *
+ * --sort		sort order for features (LOCATION, CHANGES)
+ * --region		region of interest in the feature (UPSTREAM, INSTREAM)
  *
  * @author Bruce Parrello
  *
@@ -69,10 +71,21 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
     private GroupPageFilter filter;
     /** list of column indices of interest */
     private BitSet genomeCols;
+    /** index of region type (0 = upstream, 1 = instream) */
+    private int typeIndex;
     /** location of the group page */
-    private static final String GROUP_URL = "/SEEDtk/rna.cgi/groups?group=";
+    private static final String GROUP_URL = "/rna.cgi/groups?group=";
+
 
     // COMMAND-LINE OPTIONS
+
+    /** sort order for output */
+    @Option(name = "--sort", usage = "sort order for output")
+    private GroupPageSortKey.Order sortOrder;
+
+    /** region of interest in feature */
+    @Option(name = "--region", usage = "region of interest")
+    private RegionType regionArea;
 
     /** type of filtering */
     @Option(name = "--filterType", usage = "type of filtering to perform")
@@ -98,6 +111,38 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
     @Option(name = "--genomes", metaVar = "511145.183,511145.184", usage = "comma-delimited list of genomes to display")
     protected String genomes;
 
+    /**
+     * This enum defines the two regions of interest.
+     */
+    private static enum RegionType implements IDescribable {
+        UPSTREAM {
+            @Override
+            public int getIdx() {
+                return 0;
+            }
+
+            @Override
+            public String getDescription() {
+                return "Upstream";
+            }
+        }, INSTREAM {
+            @Override
+            public int getIdx() {
+                return 1;
+            }
+
+            @Override
+            public String getDescription() {
+                return "Protein";
+            }
+        };
+
+        /**
+         * @return the position in the mark string of the region's mark
+         */
+        public abstract int getIdx();
+    }
+
     @Override
     protected void setWebDefaults() {
         this.needsWorkspace = false;
@@ -106,6 +151,8 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
         this.groupTitle = null;
         this.genomes = null;
         this.filterType = GroupPageFilter.Type.GROUP;
+        this.sortOrder = GroupPageSortKey.Order.LOCATION;
+        this.regionArea = RegionType.INSTREAM;
     }
 
     @Override
@@ -121,11 +168,17 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
             throw new FileNotFoundException("Group snips file " + this.groupFileName + " in Core directory is not found or unreadable.");
         // Fix up the group title.
         if (this.filterType != GroupPageFilter.Type.GROUP)
-            this.groupTitle = "All Features With Changes";
-        else if (this.groupTitle == null)
-            this.groupTitle = "Feature Group " + groupName;
-        else
-            this.groupTitle = "Feature Group " + StringUtils.replaceChars(this.groupTitle, '_', ' ');
+            this.groupTitle = "All Features With " + this.regionArea.getDescription() + " Changes";
+        else {
+            if (this.groupTitle == null)
+                this.groupTitle = "Feature Group " + groupName;
+            else
+                this.groupTitle = "Feature Group " + StringUtils.replaceChars(this.groupTitle, '_', ' ');
+            this.groupTitle += " Showing " + this.regionArea.getDescription() + " Changes";
+        }
+        // Save the sort order and the type index.
+        GroupPageSortKey.setOrder(this.sortOrder);
+        this.typeIndex = this.regionArea.getIdx();
         return true;
     }
 
@@ -138,7 +191,7 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
     protected void runWebCommand(CookieFile cookies) throws Exception {
         // We need to create the table.  The first two columns are the feature ID and function.
         // Then there is one column for each aligned genome.  The table is sorted by feature location.
-        HtmlTable<Key.Feature> table;
+        HtmlTable<GroupPageSortKey> table;
         // Here we will keep the list of genome IDs found.
         List<String> colGenomes = new ArrayList<String>();
         // The aligned genomes are listed in the input file.
@@ -164,9 +217,11 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
             // Now build the table.
             ColSpec[] colSpecs = IntStream.range(0, colGenomes.size() + 1).filter(i -> (i < 4 || this.genomeCols.get(i-1)))
                     .mapToObj(i -> cols.get(i)).toArray(ColSpec[]::new);
-            table = new HtmlTable<Key.Feature>(colSpecs);
+            table = new HtmlTable<GroupPageSortKey>(colSpecs);
             // Now we are positioned in the group file on the first feature.  Each feature's record consists of
-            // a feature ID, a comma-delimited list of group names, and then flags for the snip changes.
+            // a feature ID, a comma-delimited list of group names, and then flags for the snip changes.  We will
+            // store the flags in here.
+            List<String> outCols = new ArrayList<String>(colGenomes.size());
             for (String[] featureSpec : groupStream.new Section(null)) {
                 String fid = featureSpec[0];
                 // Check to see if this feature is in our group.
@@ -174,7 +229,21 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
                 if (groupFound) {
                     // Here the feature is in the group of interest.
                     Feature feat = this.baseGenome.getFeature(fid);
-                    Row<Key.Feature> row = new Row<>(table, new Key.Feature(feat));
+                    // Build the flag column list.
+                    outCols.clear();
+                    int marks = 0;
+                    for (int i = 3; i < featureSpec.length; i++) {
+                        if (this.genomeCols.get(i)) {
+                            char mark = featureSpec[i].charAt(this.typeIndex);
+                            if (mark == ' ')
+                                outCols.add("");
+                            else {
+                                marks++;
+                                outCols.add(Character.toString(mark));
+                            }
+                        }
+                    }
+                    Row<GroupPageSortKey> row = new Row<>(table, new GroupPageSortKey(feat, marks));
                     // Column 1 is the feature ID, linked to PATRIC.
                     row.add(this.baseGenome.featureLink(fid));
                     // Column 2 is the function.
@@ -183,16 +252,15 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
                     row.add(this.createGroupList(StringUtils.split(featureSpec[1], ',')));
                     // Column 4 is the base genome.
                     row.add(featureSpec[2]);
-                    // The remaining columns are copied from the input line.
-                    for (int i = 3; i < featureSpec.length; i++) {
-                        if (this.genomeCols.get(i))
-                            row.add(featureSpec[i]);
-                    }
+                    // The rest are all output columns.
+                    for (String outCol : outCols)
+                        row.add(outCol);
                 }
             }
         }
         // Now we are ready to write the page.
-        ContainerTag mainTable = this.getPageWriter().highlightBlock(table.output());
+        ContainerTag legend = p("Showing snip changes as M (mutation) or D (deletion).");
+        ContainerTag mainTable = this.getPageWriter().highlightBlock(legend, table.output());
         this.getPageWriter().writePage(this.groupTitle, h2(this.groupTitle), mainTable);
     }
 
@@ -204,7 +272,7 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
     private DomContent createGroupList(String[] groups) {
         List<DomContent> links = new ArrayList<DomContent>(groups.length);
         for (String group : groups) {
-            String url = GROUP_URL + group;
+            String url = GROUP_URL + group + ";region=" + this.regionArea.toString();
             if (this.genomes != null)
                 url += ";genomes=" + this.genomes;
             links.add(a(group).withHref(url).withTarget("_blank"));
@@ -248,6 +316,11 @@ public class GroupPageProcessor extends WebProcessor implements GroupPageFilter.
     @Override
     public BitSet getColumns() {
         return this.genomeCols;
+    }
+
+    @Override
+    public int getRegionIndex() {
+        return this.typeIndex;
     }
 
 }
