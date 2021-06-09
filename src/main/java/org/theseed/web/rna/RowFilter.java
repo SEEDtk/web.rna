@@ -79,6 +79,17 @@ public abstract class RowFilter {
                 return "Only show rows with subsystems.";
             }
 
+        }, COLVALUE {
+
+            @Override
+            public RowFilter create(ColumnProcessor processor) {
+                return new ColumnValueHighFilter(processor);
+            }
+
+            @Override
+            public String getDescription() {
+                return "Only show rows with high values in a specified column.";
+            }
         };
 
 

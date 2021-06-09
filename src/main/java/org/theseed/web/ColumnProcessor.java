@@ -79,6 +79,8 @@ import static j2html.TagCreator.*;
  * --focus		if specified, the ID of a peg; the screen will scroll to that peg
  * --subsystem	subsystem to color
  * --group		focus operon/regulon/modulon group for group filtering
+ * --filterCol	index of the column to filter on for row filtering on column values
+ * --filterMin	minimum value for row filtering on column values
  *
  * @author Bruce Parrello
  *
@@ -133,7 +135,8 @@ public class ColumnProcessor extends WebProcessor {
     private boolean baseLineColoring;
     /** list of all possible filter groups */
     private Set<String> filterGroupList;
-
+    /** column descriptor for filtering column */
+    private ColumnDescriptor filterColumnData;
 
     // COMMAND-LINE OPTIONS
 
@@ -177,6 +180,14 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--rowFilter", usage = "rule for choosing rows to display")
     protected RowFilter.Type rowFilter;
 
+    /** index of column to filter on for row filtering by column values */
+    @Option(name = "--filterCol", usage = "index of column for column-value row filtering")
+    protected int filterCol;
+
+    /** minimum value in column for row filtering by column values */
+    @Option(name = "--filterMin", usage = "minimum value for column-value row filtering")
+    protected double filterMin;
+
     /** new-column strategy */
     @Option(name = "--cmd", usage = "strategy for new columns")
     protected NewColumnCreator.Type strategy;
@@ -209,6 +220,8 @@ public class ColumnProcessor extends WebProcessor {
         this.focusPeg = "";
         this.subsystem = "";
         this.baseLineColoring = true;
+        this.filterCol = 0;
+        this.filterMin = 0.0;
     }
 
     @Override
@@ -303,8 +316,13 @@ public class ColumnProcessor extends WebProcessor {
             // Here we have a table.  If the sort column is out of range, set to to -1.
             if (this.sortCol < 0 || this.sortCol >= columns.length)
                 this.sortCol = -1;
-            // Fetch the actual column for sorting.
+            // Validate the filter column.
+            if (this.filterCol < 0) this.filterCol = 0;
+            if (this.filterCol >= columns.length)
+                throw new ParseFailureException("Invalid filter column specification.");
+            // Fetch the actual columns for sorting and filtering.
             ColumnDescriptor sortingColumn = (this.sortCol < 0 ? null : columns[this.sortCol]);
+            this.filterColumnData = columns[this.filterCol];
             // Create the filtering data structures.
             this.row = new ArrayList<CellDescriptor>(columns.length);
             this.coloredCells = new ArrayList<CellDescriptor>(columns.length);
@@ -543,6 +561,10 @@ public class ColumnProcessor extends WebProcessor {
         form.addTextRow("ranges", "Comma-delimited list of range-coloring limits (no spaces)", this.ranges);
         form.addEnumRow("rowFilter", "Row-filtering rule", this.rowFilter, RowFilter.Type.values());
         form.addEnumRow("colFilter", "Range-coloring rule", this.colFilter, ColumnQualifierType.values());
+        // Next the column-value filter.
+        defaultCol = (sortCols.size() > 0 && this.filterCol >= 0 ? sortCols.get(this.filterCol) : null);
+        form.addChoiceIndexedRow("filterCol",  "Column for value filtering", defaultCol, sortCols);
+        form.addTextRow("filterMin", "Minimum value for value filtering", Double.toString(this.filterMin));
         // Now the focus peg, the subsystem chooser, and the filtering group.
         form.addTextRow("focus", "Focus Peg", this.focusPeg);
         form.addSearchRow("subsystem", "Subsystem to highlight", this.subsystem, SUBSYSTEM_LIST);
@@ -654,6 +676,22 @@ public class ColumnProcessor extends WebProcessor {
      */
     public String getFilterGroup() {
         return this.filterGroup;
+    }
+
+    /**
+     * @return the minimum value for column-value filtering
+     */
+    public double getFilterMin() {
+        return this.filterMin;
+    }
+
+    /**
+     * @return the value for the specified feature in the current value-filtering column
+     *
+     * @param feat	feature of interest
+     */
+    public double getFilterColumnValue(RnaFeatureData feat) {
+        return this.filterColumnData.getValue(feat);
     }
 
 }
