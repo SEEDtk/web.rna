@@ -24,6 +24,7 @@ import org.theseed.web.WebProcessor;
  * sample		display details for one or more samples
  * subsystem	display a subsystem from a GTO
  * group		display the snip data for a modulon/regulon group
+ * csv			download the saved CSV produced by the column processor
  *
  */
 public class App

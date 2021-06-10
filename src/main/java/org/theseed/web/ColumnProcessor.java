@@ -5,6 +5,7 @@ package org.theseed.web;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -50,7 +51,7 @@ import static j2html.TagCreator.*;
  * translated to spaces for display to allow wrapping.  Differential columns have two sample names separated by a colored slash.
  * The form for the next column is placed to the right of the table.
  *
- * The positional parameters, as always, are the name of the coreSEED data directory and the name of the user workspace.
+ * The positional parameters, as always, are the name of the I data directory and the name of the user workspace.
  * The binary repository of the RNA data is in "fpkm.ser" in this directory.
  *
  * The specification of a column is (0) name of primary sample, (1) optional name of secondary sample.  If the second
@@ -96,6 +97,24 @@ public class ColumnProcessor extends WebProcessor {
     private GenomeSubsystemTable subTable;
     /** list of sample names */
     private List<String> samples;
+    /** array of range limits; each array entry is the exclusive upper limit for the range */
+    private double[] rangeLimits;
+    /** cell descriptors for the current row */
+    private List<CellDescriptor> row;
+    /** cell descriptors for the range-colored elements */
+    private List<CellDescriptor> coloredCells;
+    /** set of columns to be range-colored */
+    private BitSet coloredColumns;
+    /** row filter */
+    private RowFilter rowFilterObject;
+    /** set of features in the focus subsystem */
+    private Set<String> subFids;
+    /** TRUE if we are doing baseline coloring (the default) */
+    private boolean baseLineColoring;
+    /** list of all possible filter groups */
+    private Set<String> filterGroupList;
+    /** column descriptor for filtering column */
+    private ColumnDescriptor filterColumnData;
     /** cookie file name */
     public static final String RNA_COLUMN_COOKIE_FILE = "web.rna.columns";
     /** TPM file name */
@@ -119,24 +138,8 @@ public class ColumnProcessor extends WebProcessor {
     private static final String FILTER_GROUP_LIST = "filterGroupList";
     /** name of the subsystem datalist */
     private static final String SUBSYSTEM_LIST = "subsystemFocusList";
-    /** array of range limits; each array entry is the exclusive upper limit for the range */
-    private double[] rangeLimits;
-    /** cell descriptors for the current row */
-    private List<CellDescriptor> row;
-    /** cell descriptors for the range-colored elements */
-    private List<CellDescriptor> coloredCells;
-    /** set of columns to be range-colored */
-    private BitSet coloredColumns;
-    /** row filter */
-    private RowFilter rowFilterObject;
-    /** set of features in the focus subsystem */
-    private Set<String> subFids;
-    /** TRUE if we are doing baseline coloring (the default) */
-    private boolean baseLineColoring;
-    /** list of all possible filter groups */
-    private Set<String> filterGroupList;
-    /** column descriptor for filtering column */
-    private ColumnDescriptor filterColumnData;
+    /** name of the saved CSV file */
+    public static final String SAVE_FILE = "_rna.saved.csv";
 
     // COMMAND-LINE OPTIONS
 
@@ -270,170 +273,181 @@ public class ColumnProcessor extends WebProcessor {
 
     @Override
     protected void runWebCommand(CookieFile cookies) throws Exception {
-        // Get the subsystem table.
-        File subFile = new File(this.getCoreDir(), "rnaSubs.txt");
-        this.subTable = new GenomeSubsystemTable(subFile);
-        // Create the filter group list.
-        this.filterGroupList = new TreeSet<String>();
-        // Create the list of samples.
-        this.samples = this.data.getSamples().stream().map(x -> x.getName()).collect(Collectors.toList());
-        // Build the cookie string describing all the columns.
-        String cookieString = "";
-        if (! this.resetFlag) {
-            // Here we are not resetting, so we want to keep the old columns.
-            String oldCookieString = cookies.get(COLUMNS_PREFIX + this.configuration, "");
-            if (this.sample1.isEmpty() && this.strategy.requires1()) {
-                // Here no columns are being added.  We add a blank column to clear the sort string.
-                cookieString = ColumnDescriptor.addColumn(oldCookieString, ",");
-            } else {
-                NewColumnCreator creator = this.strategy.create(this.sample1, this.sample2, this.samples);
-                List<String> columns = creator.getNewColumns();
-                log.info("{} new columns computed.", columns.size());
-                // Get a copy of the cookie string so we can update it.  The first update will delete the sort
-                // information.
-                cookieString = oldCookieString;
-                for (String newColumn : columns)
-                    cookieString = ColumnDescriptor.addColumn(cookieString, newColumn);
+        // Compute the name of the save file.
+        File saveFile = this.computeWorkFile(SAVE_FILE);
+        // Write the genes displayed to the save file.
+        try (PrintWriter saveStream = new PrintWriter(saveFile)) {
+            saveStream.println("b-number,value");
+            // Get the subsystem table.
+            File subFile = new File(this.getCoreDir(), "rnaSubs.txt");
+            this.subTable = new GenomeSubsystemTable(subFile);
+            // Create the filter group list.
+            this.filterGroupList = new TreeSet<String>();
+            // Create the list of samples.
+            this.samples = this.data.getSamples().stream().map(x -> x.getName()).collect(Collectors.toList());
+            // Build the cookie string describing all the columns.
+            String cookieString = "";
+            if (! this.resetFlag) {
+                // Here we are not resetting, so we want to keep the old columns.
+                String oldCookieString = cookies.get(COLUMNS_PREFIX + this.configuration, "");
+                if (this.sample1.isEmpty() && this.strategy.requires1()) {
+                    // Here no columns are being added.  We add a blank column to clear the sort string.
+                    cookieString = ColumnDescriptor.addColumn(oldCookieString, ",");
+                } else {
+                    NewColumnCreator creator = this.strategy.create(this.sample1, this.sample2, this.samples);
+                    List<String> columns = creator.getNewColumns();
+                    log.info("{} new columns computed.", columns.size());
+                    // Get a copy of the cookie string so we can update it.  The first update will delete the sort
+                    // information.
+                    cookieString = oldCookieString;
+                    for (String newColumn : columns)
+                        cookieString = ColumnDescriptor.addColumn(cookieString, newColumn);
+                }
+                // Are we deleting a column?
+                if (this.deleteCol >= 0) {
+                    cookieString = ColumnDescriptor.deleteColumn(cookieString, this.deleteCol);
+                }
+                // Is the sort column unspecified?
+                if (this.sortCol < -1) {
+                    // Yes.  Extract it from the original string.
+                    this.sortCol = ColumnDescriptor.getSortCol(oldCookieString);
+                }
             }
-            // Are we deleting a column?
-            if (this.deleteCol >= 0) {
-                cookieString = ColumnDescriptor.deleteColumn(cookieString, this.deleteCol);
-            }
-            // Is the sort column unspecified?
-            if (this.sortCol < -1) {
-                // Yes.  Extract it from the original string.
-                this.sortCol = ColumnDescriptor.getSortCol(oldCookieString);
-            }
-        }
-        // Save the columns for next time.
-        cookies.put(COLUMNS_PREFIX + this.configuration, ColumnDescriptor.savecookies(cookieString, this.sortCol));
-        // Split the cookie string into columns.
-        ColumnDescriptor[] columns = ColumnDescriptor.parse(cookieString, this.data);
-        // The two page components will be put here.
-        List<DomContent> parts = new ArrayList<DomContent>(2);
-        // Verify that we have a table to display.
-        if (columns.length > 0) {
-            // Here we have a table.  If the sort column is out of range, set to to -1.
-            if (this.sortCol < 0 || this.sortCol >= columns.length)
-                this.sortCol = -1;
-            // Validate the filter column.
-            if (this.filterCol < 0) this.filterCol = 0;
-            if (this.filterCol >= columns.length)
-                throw new ParseFailureException("Invalid filter column specification.");
-            // Fetch the actual columns for sorting and filtering.
-            ColumnDescriptor sortingColumn = (this.sortCol < 0 ? null : columns[this.sortCol]);
-            this.filterColumnData = columns[this.filterCol];
-            // Create the filtering data structures.
-            this.row = new ArrayList<CellDescriptor>(columns.length);
-            this.coloredCells = new ArrayList<CellDescriptor>(columns.length);
-            this.coloredColumns = new BitSet(columns.length);
-            // Compute the colored columns.
-            for (int i = 0; i < columns.length; i++) {
-                if (this.colFilter.isRangeColored(columns[i]))
-                    this.coloredColumns.set(i);
-            }
-            // Create the column specs.
-            ColSpec[] specs = new ColSpec[columns.length + HEAD_COLS];
-            specs[0] = new ColSpec.Num("#");
-            specs[1] = new ColSpec.Normal("peg_id");
-            specs[2] = new ColSpec.Normal("gene");
-            specs[3] = new ColSpec.Num("na_len");
-            specs[4] = new ColSpec.Normal("subsystems");
-            specs[5] = new ColSpec.Num("ar_num");
-            specs[6] = new ColSpec.Normal("modulons");
-            specs[7] = new ColSpec.Normal("operon");
-            specs[8] = new ColSpec.Num("baseline");
-            for (int i = 0; i < columns.length; i++)
-                specs[i+HEAD_COLS] = this.columnSpec(columns[i], i);
-            HtmlTable<MultiKey> table = new HtmlTable<>(specs);
-            // Save the subsystem feature set.
-            this.subFids = this.subTable.getSubFeatures(this.subsystem);
-            // Now we create a row for each feature.
-            for (RnaData.Row dataRow : this.data) {
-                // Get the feature for this row.
-                RnaFeatureData feat = dataRow.getFeat();
-                // Get the sort key for this row.
-                MultiKey rowKey = new MultiKey(feat, sortingColumn);
-                // Build the column descriptors.
+            // Save the columns for next time.
+            cookies.put(COLUMNS_PREFIX + this.configuration, ColumnDescriptor.savecookies(cookieString, this.sortCol));
+            // Split the cookie string into columns.
+            ColumnDescriptor[] columns = ColumnDescriptor.parse(cookieString, this.data);
+            // The two page components will be put here.
+            List<DomContent> parts = new ArrayList<DomContent>(2);
+            // Verify that we have a table to display.
+            if (columns.length > 0) {
+                // Here we have a table.  If the sort column is out of range, set to to -1.
+                if (this.sortCol < 0 || this.sortCol >= columns.length)
+                    this.sortCol = -1;
+                // Validate the filter column.
+                if (this.filterCol < 0) this.filterCol = 0;
+                if (this.filterCol >= columns.length)
+                    throw new ParseFailureException("Invalid filter column specification.");
+                // Fetch the actual columns for sorting and filtering.
+                ColumnDescriptor sortingColumn = (this.sortCol < 0 ? null : columns[this.sortCol]);
+                this.filterColumnData = columns[this.filterCol];
+                ColumnDescriptor saveColumn = (sortingColumn == null ? columns[columns.length - 1] : sortingColumn);
+                // Create the filtering data structures.
+                this.row = new ArrayList<CellDescriptor>(columns.length);
+                this.coloredCells = new ArrayList<CellDescriptor>(columns.length);
+                this.coloredColumns = new BitSet(columns.length);
+                // Compute the colored columns.
                 for (int i = 0; i < columns.length; i++) {
-                    double value = columns[i].getValue(feat);
-                    if (! this.coloredColumns.get(i)) {
-                        // Here the column is not colored.
-                        this.row.add(new CellDescriptor(value, 0));
-                    } else {
-                        // Here the column is colored.  We need to compute the color.
-                        int color = this.computeColoring(feat, value);
-                        // Create the cell descriptor.
-                        CellDescriptor cell = new CellDescriptor(value, color);
-                        this.row.add(cell);
-                        this.coloredCells.add(cell);
-                    }
+                    if (this.colFilter.isRangeColored(columns[i]))
+                        this.coloredColumns.set(i);
                 }
-                // Check the row filter.
-                if (this.rowFilterObject.isRowDisplayable(feat)) {
-                    // Create the row.
-                    Row<MultiKey> tableRow = new Row<MultiKey>(table, rowKey);
-                    // Put in a placeholder for the numbering column.
-                    tableRow.add(0);
-                    // Set up the PEG ID.  This contains a link to the feature's PATRIC page.
-                    // We also need to mark it if it is the focus peg.
-                    String fid = feat.getId();
-                    ContainerTag fidLink = ColumnDescriptor.fidLink(fid);
-                    if (fid.contentEquals(this.focusPeg))
-                        fidLink.withId(FOCUS_CLASS);
-                    tableRow.add(fidLink);
-                    // Set up the gene ID.  if it is non-empty, we link it to a neighborhood filter.
-                    String gene = feat.getGene();
-                    DomContent geneHtml;
-                    if (gene.isEmpty())
-                        geneHtml = rawHtml("&nbsp;");
-                    else {
-                        String regionURL = String.format("/rna.cgi/columns?focus=%s;rowFilter=REGION;sortCol=-1", fid);
-                        String regionLink = this.getPageWriter().local_url(regionURL, this.getWorkSpace());
-                        geneHtml = a(gene).withHref(regionLink).withTarget("_blank");
-                    }
-                    tableRow.add(geneHtml);
-                    tableRow.add(feat.getLocation().getLength());
-                    // Now we process the subsystem column.
-                    Set<GenomeSubsystemTable.SubData> subs = this.subTable.getSubsystems(feat.getId());
-                    tableRow.add(this.getSubsystemList(fid, subs));
-                    // Check for the highlight subsystem.
-                    if (this.subFids.contains(fid))
-                        tableRow.highlight(4);
-                    // Next come the regulon, modulon, and operon.  These need to be added to the filter group list.
-                    tableRow.add(feat.getAtomicRegulon());
-                    this.filterGroupList.add(String.format("AR%d", feat.getAtomicRegulon()));
-                    tableRow.add(StringUtils.join(feat.getiModulons(), ", "));
-                    Arrays.stream(feat.getiModulons()).forEach(x -> this.filterGroupList.add(x));;
-                    tableRow.add(feat.getOperon());
-                    this.filterGroupList.add(feat.getOperon());
-                    // Finally, the baseline.
-                    tableRow.add(feat.getBaseLine());
-                    // Now fill in the numbers.
+                // Create the column specs.
+                ColSpec[] specs = new ColSpec[columns.length + HEAD_COLS];
+                specs[0] = new ColSpec.Num("#");
+                specs[1] = new ColSpec.Normal("peg_id");
+                specs[2] = new ColSpec.Normal("gene");
+                specs[3] = new ColSpec.Num("na_len");
+                specs[4] = new ColSpec.Normal("subsystems");
+                specs[5] = new ColSpec.Num("ar_num");
+                specs[6] = new ColSpec.Normal("modulons");
+                specs[7] = new ColSpec.Normal("operon");
+                specs[8] = new ColSpec.Num("baseline");
+                for (int i = 0; i < columns.length; i++)
+                    specs[i+HEAD_COLS] = this.columnSpec(columns[i], i);
+                HtmlTable<MultiKey> table = new HtmlTable<>(specs);
+                // Save the subsystem feature set.
+                this.subFids = this.subTable.getSubFeatures(this.subsystem);
+                // Now we create a row for each feature.
+                for (RnaData.Row dataRow : this.data) {
+                    // Get the feature for this row.
+                    RnaFeatureData feat = dataRow.getFeat();
+                    // Get the sort key for this row.
+                    MultiKey rowKey = new MultiKey(feat, sortingColumn);
+                    // Build the column descriptors.
                     for (int i = 0; i < columns.length; i++) {
-                        CellDescriptor cell = this.row.get(i);
-                        tableRow.add(cell.getValue());
-                        int color = cell.getRange();
-                        if (color > 0)
-                            tableRow.addStyle(i + HEAD_COLS, String.format("range%d", color));
+                        double value = columns[i].getValue(feat);
+                        if (! this.coloredColumns.get(i)) {
+                            // Here the column is not colored.
+                            this.row.add(new CellDescriptor(value, 0));
+                        } else {
+                            // Here the column is colored.  We need to compute the color.
+                            int color = this.computeColoring(feat, value);
+                            // Create the cell descriptor.
+                            CellDescriptor cell = new CellDescriptor(value, color);
+                            this.row.add(cell);
+                            this.coloredCells.add(cell);
+                        }
                     }
+                    // Check the row filter.
+                    if (this.rowFilterObject.isRowDisplayable(feat)) {
+                        // Create the row.
+                        Row<MultiKey> tableRow = new Row<MultiKey>(table, rowKey);
+                        // Put in a placeholder for the numbering column.
+                        tableRow.add(0);
+                        // Set up the PEG ID.  This contains a link to the feature's PATRIC page.
+                        // We also need to mark it if it is the focus peg.
+                        String fid = feat.getId();
+                        ContainerTag fidLink = ColumnDescriptor.fidLink(fid);
+                        if (fid.contentEquals(this.focusPeg))
+                            fidLink.withId(FOCUS_CLASS);
+                        tableRow.add(fidLink);
+                        // Set up the gene ID.  if it is non-empty, we link it to a neighborhood filter.
+                        String gene = feat.getGene();
+                        DomContent geneHtml;
+                        if (gene.isEmpty())
+                            geneHtml = rawHtml("&nbsp;");
+                        else {
+                            String regionURL = String.format("/rna.cgi/columns?focus=%s;rowFilter=REGION;sortCol=-1", fid);
+                            String regionLink = this.getPageWriter().local_url(regionURL, this.getWorkSpace());
+                            geneHtml = a(gene).withHref(regionLink).withTarget("_blank");
+                        }
+                        tableRow.add(geneHtml);
+                        tableRow.add(feat.getLocation().getLength());
+                        // Now we must save this feature to the csv.
+                        String bNum = feat.getBNumber();
+                        if (bNum != null && ! bNum.isEmpty())
+                            saveStream.format("%s,%6.4f%n", feat.getBNumber(), saveColumn.getValue(feat));
+                        // Now we process the subsystem column.
+                        Set<GenomeSubsystemTable.SubData> subs = this.subTable.getSubsystems(feat.getId());
+                        tableRow.add(this.getSubsystemList(fid, subs));
+                        // Check for the highlight subsystem.
+                        if (this.subFids.contains(fid))
+                            tableRow.highlight(4);
+                        // Next come the regulon, modulon, and operon.  These need to be added to the filter group list.
+                        tableRow.add(feat.getAtomicRegulon());
+                        this.filterGroupList.add(String.format("AR%d", feat.getAtomicRegulon()));
+                        tableRow.add(StringUtils.join(feat.getiModulons(), ", "));
+                        Arrays.stream(feat.getiModulons()).forEach(x -> this.filterGroupList.add(x));;
+                        tableRow.add(feat.getOperon());
+                        this.filterGroupList.add(feat.getOperon());
+                        // Finally, the baseline.
+                        tableRow.add(feat.getBaseLine());
+                        // Now fill in the numbers.
+                        for (int i = 0; i < columns.length; i++) {
+                            CellDescriptor cell = this.row.get(i);
+                            tableRow.add(cell.getValue());
+                            int color = cell.getRange();
+                            if (color > 0)
+                                tableRow.addStyle(i + HEAD_COLS, String.format("range%d", color));
+                        }
+                    }
+                    // Set up for the next row.
+                    this.row.clear();
+                    this.coloredCells.clear();
                 }
-                // Set up for the next row.
-                this.row.clear();
-                this.coloredCells.clear();
+                table.setIndexColumn(0);
+                // Format the table and store it in the output list.
+                parts.add(table.output());
             }
-            table.setIndexColumn(0);
-            // Format the table and store it in the output list.
-            parts.add(table.output());
+            // Build the forms.
+            DomContent forms = buildForms(columns, cookies);
+            parts.add(forms);
+            // Render the web page.  We build an invisible one-row table with each component in a cell.
+            DomContent assembly = this.getPageWriter().scrollBlock(table(tr().with(parts.stream().map(x -> td(x).withClass("borderless")))).withClass("borderless"));
+            DomContent wrapped = this.getPageWriter().highlightBlock(assembly);
+            // Write the page.
+            this.getPageWriter().writePage("RNA Expression Data", text("RNA Expression Data"), wrapped);
         }
-        // Build the forms.
-        DomContent forms = buildForms(columns, cookies);
-        parts.add(forms);
-        // Render the web page.  We build an invisible one-row table with each component in a cell.
-        DomContent assembly = this.getPageWriter().scrollBlock(table(tr().with(parts.stream().map(x -> td(x).withClass("borderless")))).withClass("borderless"));
-        DomContent wrapped = this.getPageWriter().highlightBlock(assembly);
-        // Write the page.
-        this.getPageWriter().writePage("RNA Expression Data", text("RNA Expression Data"), wrapped);
     }
 
     /**
@@ -589,10 +603,15 @@ public class ColumnProcessor extends WebProcessor {
         // Get a link to the sample summary page.
         String metaLink = this.getPageWriter().local_url("/rna.cgi/meta", this.getWorkSpace());
         DomContent metaLinkHtml = a("Display Summary of Samples").withHref(metaLink).withTarget("_blank");
+        // Get a link to the configuration manager.
         String manageLink = this.getPageWriter().local_url("/rna.cgi/manage", this.getWorkSpace());
         DomContent manageLinkHtml = a("Manage Saved Configurations").withHref(manageLink);
+        // Get a link to the download service.
+        String downloadLink = this.getPageWriter().local_url("/download.cgi/rna", this.getWorkSpace());
+        DomContent downloadLinkHtml = a("Download CSV of Selected Genes").withHref(downloadLink);
+        // Form the page.
         DomContent retVal = div(h2(metaLinkHtml), h2("Add New Column / Configure").withClass("form"),
-                filterTable.output(), form.output(),
+                filterTable.output(), form.output(), h2(downloadLinkHtml),
                 h2("Save Configuration").withClass("form"), sForm.output(), iFrame,
                 h2("Load Configuration").withClass("form"), lForm.output(), h2(manageLinkHtml)
                 ).withClass("center");
