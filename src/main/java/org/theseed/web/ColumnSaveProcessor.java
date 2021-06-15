@@ -9,6 +9,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.theseed.utils.ParseFailureException;
 import org.theseed.web.rna.ColumnDescriptor;
 
 import j2html.tags.DomContent;
@@ -33,6 +34,8 @@ public class ColumnSaveProcessor extends WebProcessor {
     // FIELDS
     /** logging facility */
     protected static Logger log = LoggerFactory.getLogger(ColumnSaveProcessor.class);
+    /** list of valid characters in configuration names */
+    private static final String VALID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
 
     // COMMAND-LINE OPTIONS
 
@@ -71,7 +74,7 @@ public class ColumnSaveProcessor extends WebProcessor {
             String cookieString = cookies.get(ColumnProcessor.COLUMNS_PREFIX + this.sourceConfig, "");
             int size = ColumnDescriptor.getSpecStrings(cookieString).length;
             // Insure the new name is valid.
-            String newName = StringUtils.replaceChars(this.targetConfig, ' ', '_');
+            String newName = computeNewName(this.targetConfig);
             // Store it under the new name.
             cookies.put(ColumnProcessor.COLUMNS_PREFIX + newName, cookieString);
             // Format and write the result message.
@@ -80,6 +83,22 @@ public class ColumnSaveProcessor extends WebProcessor {
                     "saved to", b(newName), "."));
         }
         this.getPageWriter().writePage("Configuration Save", null, message);
+    }
+
+    /**
+     * This method fixes an incoming configuration name and insures it is valid.
+     *
+     * @param targetConfig	proposed configuration name
+     *
+     * @return the name for a configuration
+     *
+     * @throws ParseFailureException
+     */
+    public static String computeNewName(String targetConfig) throws ParseFailureException {
+        String retVal = StringUtils.replaceChars(targetConfig, ' ', '_');
+        if (! StringUtils.containsOnly(retVal, VALID_CHARS))
+            throw new ParseFailureException("Invalid configuration name.  Can only contain letters, digits, and underscores.");
+        return retVal;
     }
 
 }

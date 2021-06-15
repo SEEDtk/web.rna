@@ -10,7 +10,9 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
+import org.theseed.utils.ParseFailureException;
 import org.theseed.web.ColumnProcessor;
+import org.theseed.web.ColumnSaveProcessor;
 import org.theseed.web.CookieFile;
 
 import j2html.tags.DomContent;
@@ -43,12 +45,12 @@ public class ColumnManageProcessor extends ManageProcessor {
     }
 
     @Override
-    protected String renameConfiguration(CookieFile cookies) {
+    protected String renameConfiguration(CookieFile cookies) throws ParseFailureException {
         String oldConfig = ColumnProcessor.COLUMNS_PREFIX + this.renameConfig;
         String oldValue = cookies.getString(oldConfig);
         if (oldValue == null)
             throw new IllegalArgumentException("Cannot find configuration " + this.renameConfig + " to rename.");
-        String newConfigFixed = StringUtils.replaceChars(this.newConfigName, ' ', '_');
+        String newConfigFixed = ColumnSaveProcessor.computeNewName(this.newConfigName);
         String newConfig = ColumnProcessor.COLUMNS_PREFIX + newConfigFixed;
         if (cookies.getString(newConfig) != null)
             throw new IllegalArgumentException("Configuration name " + this.newConfigName + " already exists.");

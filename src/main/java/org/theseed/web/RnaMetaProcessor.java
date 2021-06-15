@@ -6,6 +6,7 @@ package org.theseed.web;
 import java.io.File;
 import java.io.IOException;
 
+import org.kohsuke.args4j.Option;
 import org.theseed.reports.PageWriter;
 import org.theseed.rna.RnaData;
 
@@ -18,6 +19,10 @@ import static j2html.TagCreator.*;
  *
  * The positional parameters, as always, are the name of the coreSEED data directory and the name of the user workspace.
  *
+ * The command-line options are as follows.
+ *
+ * --name	name of the current column configuration
+ *
  * @author Bruce Parrello
  *
  */
@@ -27,8 +32,15 @@ public class RnaMetaProcessor extends WebProcessor {
     /** length of E coli genome */
     public static final int GENOME_LEN = 4638920;
 
+    // COMMAND-LINE OPTIONS
+
+    /** configuration name */
+    @Option(name = "--name", usage = "configuration name")
+    protected String configuration;
+
     @Override
     protected void setWebDefaults() {
+        this.configuration = "Default";
     }
 
     @Override
@@ -65,7 +77,8 @@ public class RnaMetaProcessor extends WebProcessor {
         PageWriter writer = this.getPageWriter();
         DomContent submitForm = form().withMethod("POST")
                 .withAction(this.commandUrl("rna", "columns"))
-                .withClass("web").with(p(join("Add checked samples to RNA Seq page.", input().withType("submit"))))
+                .withClass("web").with(p(join("Add checked samples to RNA Seq page configuration",
+                        input().withValue(this.configuration).withType("text").withName("name"), input().withType("submit"))))
                 .with(table.output());
         DomContent tableHtml = this.getPageWriter().highlightBlock(submitForm);
         writer.writePage("RNA Seq Metadata", text("Table of Samples"), tableHtml);

@@ -17,6 +17,7 @@ import java.util.Set;
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.theseed.utils.ParseFailureException;
 import org.theseed.web.ColSpec;
 import org.theseed.web.CookieFile;
 import org.theseed.web.HtmlForm;
@@ -117,8 +118,10 @@ public abstract class ManageProcessor extends WebProcessor {
      * @param cookies	cookie file
      *
      * @return the new configuration name (corrected)
+     *
+     * @throws ParseFailureException
      */
-    protected abstract String renameConfiguration(CookieFile cookies);
+    protected abstract String renameConfiguration(CookieFile cookies) throws ParseFailureException;
 
     /**
      * Delete a configuration.

@@ -18,6 +18,7 @@ import java.util.regex.Matcher;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.TextStringBuilder;
+import org.theseed.utils.ParseFailureException;
 import org.theseed.web.CookieFile;
 import org.theseed.web.HtmlForm;
 import org.theseed.web.ProductionProcessor;
@@ -71,14 +72,14 @@ public class ProductionManageProcessor extends ManageProcessor {
     }
 
     @Override
-    protected String renameConfiguration(CookieFile cookies) {
+    protected String renameConfiguration(CookieFile cookies) throws ParseFailureException {
         if (ProductionProcessor.badConfigName(this.newConfigName))
-            throw new IllegalArgumentException("New configuration name contains invalid characters.");
+            throw new ParseFailureException("New configuration name contains invalid characters.");
         else {
             File oldFile = this.fileMap.get(this.renameConfig);
             File newFile = CookieFile.computeFile(this.getWorkSpaceDir(), ProductionProcessor.getConfigName(this.newConfigName));
             if (! oldFile.exists())
-                throw new IllegalArgumentException("Configuration name " + this.renameConfig + " does not exist.");
+                throw new ParseFailureException("Configuration name " + this.renameConfig + " does not exist.");
             try {
                 if (newFile.exists())
                     FileUtils.forceDelete(newFile);

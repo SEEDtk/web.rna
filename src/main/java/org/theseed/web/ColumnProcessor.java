@@ -245,6 +245,8 @@ public class ColumnProcessor extends WebProcessor {
         }
         if (! this.sample2.isEmpty() && ! this.sample2.contentEquals("baseline") && this.data.getColIdx(this.sample2) < 0)
             throw new ParseFailureException("Invalid sample name " + this.sample2 + ".");
+        // Insure the configuration name is valid.
+        this.configuration = ColumnSaveProcessor.computeNewName(this.configuration);
         // Verify the ranges.
         if (this.ranges.isEmpty()) {
             // If no range limits were specified, everything is treated as normal (range 0).
@@ -274,8 +276,8 @@ public class ColumnProcessor extends WebProcessor {
     @Override
     protected void runWebCommand(CookieFile cookies) throws Exception {
         // Compute the name of the save file.
-        File saveFile = this.computeWorkFile(SAVE_FILE);
-        // Write the genes displayed to the save file.
+        File saveFile = this.computeWorkFile(this.configuration + SAVE_FILE);
+        // We will write the genes displayed to the save file.
         try (PrintWriter saveStream = new PrintWriter(saveFile)) {
             saveStream.println("b-number,value");
             // Get the subsystem table.
@@ -601,13 +603,13 @@ public class ColumnProcessor extends WebProcessor {
         // Create the result frame for the save form.
         ContainerTag iFrame = iframe().withName("saveResult").withStyle("height: 4em; width: 100%;");
         // Get a link to the sample summary page.
-        String metaLink = this.getPageWriter().local_url("/rna.cgi/meta", this.getWorkSpace());
+        String metaLink = this.getPageWriter().local_url("/rna.cgi/meta?name=" + this.configuration, this.getWorkSpace());
         DomContent metaLinkHtml = a("Display Summary of Samples").withHref(metaLink).withTarget("_blank");
         // Get a link to the configuration manager.
         String manageLink = this.getPageWriter().local_url("/rna.cgi/manage", this.getWorkSpace());
         DomContent manageLinkHtml = a("Manage Saved Configurations").withHref(manageLink);
         // Get a link to the download service.
-        String downloadLink = this.getPageWriter().local_url("/download.cgi/rna", this.getWorkSpace());
+        String downloadLink = this.getPageWriter().local_url("/download.cgi/rna." + this.configuration, this.getWorkSpace());
         DomContent downloadLinkHtml = a("Download CSV of Selected Genes").withHref(downloadLink);
         // Form the page.
         DomContent retVal = div(h2(metaLinkHtml), h2("Add New Column / Configure").withClass("form"),
