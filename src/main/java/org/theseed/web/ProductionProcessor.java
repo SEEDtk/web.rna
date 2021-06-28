@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -162,6 +163,10 @@ public class ProductionProcessor extends WebProcessor {
     @Option(name = "--source", usage = "name of file to load")
     protected String source;
 
+    /** maximum number of samples to display */
+    @Option(name = "--max", usage = "maximum number of samples to show")
+    protected int maxSamples;
+
     @Override
     protected void setWebDefaults() {
         this.f1 = new ArrayList<String>();
@@ -179,6 +184,7 @@ public class ProductionProcessor extends WebProcessor {
         this.restoreFilters = null;
         this.sortCol = 1;
         this.storeConfig = null;
+        this.maxSamples = Integer.MAX_VALUE;
         this.source = "thrall.production.tbl";
     }
 
@@ -215,6 +221,7 @@ public class ProductionProcessor extends WebProcessor {
             cookies.put("minPred", this.minPred);
             cookies.put("maxPred", this.maxPred);
             cookies.put("compare", this.compare);
+            cookies.put("max", this.maxSamples);
             cookies.flush();
             if (this.storeConfig == null) {
                 this.configMessage = "Default configuration in use.";
@@ -250,6 +257,8 @@ public class ProductionProcessor extends WebProcessor {
         // Insure delete-nothing is a choice for the insert and delete columns.
         this.choices.get(SampleId.DELETE_COL).add("000");
         this.choices.get(SampleId.INSERT_COL).add("000");
+        // Track the number of rows displayed.
+        int rowsLeft = this.maxSamples;
         // Read the production file.
         File prodFile = new File(this.getCoreDir(), this.source);
         try (TabbedLineReader prodStream = new TabbedLineReader(prodFile)) {
@@ -257,7 +266,9 @@ public class ProductionProcessor extends WebProcessor {
             int predCol = prodStream.findField("predicted");
             int actualCol = prodStream.findField("production");
             int growthCol = prodStream.findField("density");
-            for (TabbedLineReader.Line line : prodStream) {
+            Iterator<TabbedLineReader.Line> iter = prodStream.iterator();
+            while (rowsLeft > 0 && iter.hasNext()) {
+                TabbedLineReader.Line line = iter.next();
                 // Determine the current sample.
                 String sampleId = line.get(sampleCol);
                 SampleId sample = new SampleId(sampleId);
@@ -296,6 +307,7 @@ public class ProductionProcessor extends WebProcessor {
                     if (keep && pred >= this.minPred && pred <= this.maxPred) {
                         // We are keeping this sample:  record it.
                         this.tableBuilder.recordSample(sample, pred, actual, growth);
+                        rowsLeft--;
                     }
                 }
             }
@@ -372,6 +384,7 @@ public class ProductionProcessor extends WebProcessor {
         this.minPred = cookies.get("minPred", 0.0);
         this.maxPred = cookies.get("maxPred", 5.0);
         this.compare = cookies.get("compare", "(none)");
+        this.maxSamples = cookies.get("max", Integer.MAX_VALUE);
     }
 
     /**
@@ -383,6 +396,8 @@ public class ProductionProcessor extends WebProcessor {
         HtmlForm retVal = new HtmlForm("rna", "production", this);
         // Create the main filter.
         retVal.addFilterBox("sampleFilter", "Sample ID filtering (click on column head to set/clear a column)", FRAGMENT_NAMES, FRAGMENT_TITLES, this.choices, this.filters);
+        // Specify the maximum number of rows to display.
+        retVal.addIntRow("max", "Maximum number of samples to show", this.maxSamples, 10, Integer.MAX_VALUE);
         // Create the real-only flag.
         retVal.addCheckBoxWithDefault("real", "Only show samples with real values", this.realOnly);
         // Specify the prediction limits.
