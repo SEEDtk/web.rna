@@ -33,7 +33,10 @@ import org.theseed.web.rna.ProductionDeleteTable;
 import org.theseed.web.rna.ProductionInsertTable;
 import org.theseed.web.rna.ProductionDisplayTable;
 
+import j2html.tags.ContainerTag;
 import j2html.tags.DomContent;
+import j2html.tags.DomContentJoiner;
+
 import static j2html.TagCreator.*;
 
 /**
@@ -70,6 +73,8 @@ import static j2html.TagCreator.*;
  * --saved		name of a configuration (or 1 for default): use saved parameter values for filters (no filters may be specified)
  * --store		name of a configuration in which to store the current one
  * --source		name of prediction file to load
+ * --max		maxmimum number of table rows to display
+ * --first		number (0-based) of first table data row to display
  *
  * @author Bruce Parrello
  *
@@ -97,6 +102,8 @@ public class ProductionProcessor extends WebProcessor {
     private String configMessage;
     /** map of source types to source files */
     private Map<String, String> sourceMap;
+    /** name of current configuration ("1" for the default) */
+    private String configName;
 
     // COMMAND-LINE OPTIONS
 
@@ -167,6 +174,10 @@ public class ProductionProcessor extends WebProcessor {
     @Option(name = "--max", usage = "maximum number of samples to show")
     protected int maxSamples;
 
+    /** number (0-based) of first sample to display */
+    @Option(name = "--first", usage = "number (0-based) of first sample to display")
+    protected int firstSample;
+
     @Override
     protected void setWebDefaults() {
         this.f1 = new ArrayList<String>();
@@ -184,7 +195,8 @@ public class ProductionProcessor extends WebProcessor {
         this.restoreFilters = null;
         this.sortCol = 1;
         this.storeConfig = null;
-        this.maxSamples = Integer.MAX_VALUE;
+        this.maxSamples = 500;
+        this.firstSample = 0;
         this.source = "thrall.production.tbl";
     }
 
@@ -222,9 +234,11 @@ public class ProductionProcessor extends WebProcessor {
             cookies.put("maxPred", this.maxPred);
             cookies.put("compare", this.compare);
             cookies.put("max", this.maxSamples);
+            cookies.put("source", this.source);
             cookies.flush();
             if (this.storeConfig == null) {
                 this.configMessage = "Default configuration in use.";
+                this.configName = "1";
             } else if (badConfigName(this.storeConfig)) {
                 this.configMessage = "Invalid characters in configuration name.  Configuration not saved.";
             } else {
@@ -232,17 +246,20 @@ public class ProductionProcessor extends WebProcessor {
                 File saveName = CookieFile.computeFile(this.getWorkSpaceDir(), getConfigName(this.storeConfig));
                 cookies.flush(saveName);
                 this.configMessage = "Configuration saved to " + this.storeConfig + ".";
+                this.configName = this.storeConfig;
             }
         } else if (this.restoreFilters.contentEquals("1")) {
             // Here we have to restore the old form data.
             restoreParmsFromCookieFile(cookies);
             this.configMessage = "Configuration restored from saved default.";
+            this.configName = "1";
         } else {
             // Here we have to restore the old form data from an alternate cookie file.
             CookieFile otherCookies = new CookieFile(this.getWorkSpaceDir(), getConfigName(this.restoreFilters));
             restoreParmsFromCookieFile(otherCookies);
             cookies.flush();
             this.configMessage = "Configuration restored from \"" + this.restoreFilters + "\".";
+            this.configName = this.restoreFilters;
         }
         // Compute the type of output table from the comparison string.
         int compareIdx = ArrayUtils.indexOf(FRAGMENT_TITLES, this.compare);
@@ -257,8 +274,6 @@ public class ProductionProcessor extends WebProcessor {
         // Insure delete-nothing is a choice for the insert and delete columns.
         this.choices.get(SampleId.DELETE_COL).add("000");
         this.choices.get(SampleId.INSERT_COL).add("000");
-        // Track the number of rows displayed.
-        int rowsLeft = this.maxSamples;
         // Read the production file.
         File prodFile = new File(this.getCoreDir(), this.source);
         try (TabbedLineReader prodStream = new TabbedLineReader(prodFile)) {
@@ -267,7 +282,7 @@ public class ProductionProcessor extends WebProcessor {
             int actualCol = prodStream.findField("production");
             int growthCol = prodStream.findField("density");
             Iterator<TabbedLineReader.Line> iter = prodStream.iterator();
-            while (rowsLeft > 0 && iter.hasNext()) {
+            while (iter.hasNext()) {
                 TabbedLineReader.Line line = iter.next();
                 // Determine the current sample.
                 String sampleId = line.get(sampleCol);
@@ -307,7 +322,6 @@ public class ProductionProcessor extends WebProcessor {
                     if (keep && pred >= this.minPred && pred <= this.maxPred) {
                         // We are keeping this sample:  record it.
                         this.tableBuilder.recordSample(sample, pred, actual, growth);
-                        rowsLeft--;
                     }
                 }
             }
@@ -321,12 +335,13 @@ public class ProductionProcessor extends WebProcessor {
             outputTable = p("");
         } else {
             summary = this.tableBuilder.getSummary();
-            outputTable = prodTable.output();
+            outputTable = prodTable.output(this.firstSample, this.maxSamples);
         }
         // Build the form for the next time.
         DomContent submitForm = this.createForm();
         // Write the web page.
-        DomContent highlightBlock = this.getPageWriter().highlightBlock(submitForm, summary, outputTable);
+        DomContent paginator = this.computePaginator(prodTable);
+        DomContent highlightBlock = this.getPageWriter().highlightBlock(submitForm, summary, paginator, outputTable, paginator);
         this.getPageWriter().writePage("Threonine Production Predictions", text("Threonine Production Predictions"), highlightBlock);
     }
 
@@ -384,6 +399,7 @@ public class ProductionProcessor extends WebProcessor {
         this.minPred = cookies.get("minPred", 0.0);
         this.maxPred = cookies.get("maxPred", 5.0);
         this.compare = cookies.get("compare", "(none)");
+        this.source = cookies.get("source", "thrall.production.tbl");
         this.maxSamples = cookies.get("max", Integer.MAX_VALUE);
     }
 
@@ -394,6 +410,8 @@ public class ProductionProcessor extends WebProcessor {
      */
     private DomContent createForm() throws IOException {
         HtmlForm retVal = new HtmlForm("rna", "production", this);
+        // Add a hidden row for the start position.
+        retVal.addHidden("first", "0");
         // Create the main filter.
         retVal.addFilterBox("sampleFilter", "Sample ID filtering (click on column head to set/clear a column)", FRAGMENT_NAMES, FRAGMENT_TITLES, this.choices, this.filters);
         // Specify the maximum number of rows to display.
@@ -430,4 +448,65 @@ public class ProductionProcessor extends WebProcessor {
         return sortCol;
     }
 
+    /**
+     * @return a pagination control for the master table
+     *
+     * @param mainTable		main HTML table to paginate
+     */
+    private ContainerTag computePaginator(HtmlTable<? extends Key> mainTable) {
+        ContainerTag retVal = p();
+        if (this.firstSample > 0 || this.maxSamples < mainTable.getHeight()) {
+            // Here we are showing only part of the table, so we need a real paginator.
+            // We will show five pages with the current one in the center, plus the first and last pages.
+            // Start with the number of pages.  The page numbers are 0-based; we fix them when we display them.
+            int n = mainTable.getHeight();
+            int totalPages = (n + this.maxSamples - 1) / this.maxSamples;
+            int lastPage = totalPages - 1;
+            int currPage = this.firstSample / this.maxSamples;
+            int midPage0 = currPage - 2;
+            int midPage1 = currPage + 2;
+            // Insure we are not trying to display past either end.
+            if (midPage0 < 0) {
+                midPage0 = 0;
+                midPage1 = 4;
+            }
+            if (midPage1 > lastPage)
+                midPage1 = lastPage;
+            // Compute our base URL.
+            String url = this.getPageWriter().local_url("/rna.cgi/production?saved=" + this.configName, this.getWorkSpace());
+            // We accumulate the page hyperlinks in here.
+            List<Object> pages = new ArrayList<Object>(10);
+            if (midPage0 > 0) {
+                // Here we need a first page.
+                pages.add(this.pageUrl(0, url));
+                // If there is a gap, put in dots.
+                if (midPage0 > 1)
+                    pages.add("...");
+            }
+            // Add the middle pages.
+            for (int p = midPage0; p <= midPage1; p++)
+                pages.add(pageUrl(p, url));
+            // Now we handle the last page.
+            if (lastPage > midPage1) {
+                // If there is a gap, put in dots.
+                if (midPage1 + 1 < lastPage)
+                    pages.add("...");
+                pages.add(pageUrl(lastPage, url));
+            }
+            // Join all the pieces together.
+            Object[] pieces = pages.stream().toArray();
+            retVal.with(DomContentJoiner.join(" ", false, pieces));
+        }
+        return retVal;
+    }
+
+    /**
+     * @return the hyperlink for a specified table page
+     *
+     * @param p		page index (0-based)
+     * @param url	base url
+     */
+    private ContainerTag pageUrl(int p, String url) {
+        return a(String.format("%d", p+1)).withHref(String.format("%s;first=%d", url, p * this.maxSamples));
+    }
 }
