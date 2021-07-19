@@ -39,8 +39,8 @@ public class DifferentialColumnDescriptor extends ColumnDescriptor {
     @Override
     public double getValue(RnaFeatureData feat) {
         double retVal;
-        double dem = this.getWeight(feat, this.colIdx2);
-        double num = this.getWeight(feat, this.colIdx1);
+        double dem = this.getDisplayWeight(feat, this.colIdx2);
+        double num = this.getDisplayWeight(feat, this.colIdx1);
         retVal = num / dem;
         return retVal;
     }

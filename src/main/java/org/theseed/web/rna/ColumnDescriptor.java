@@ -83,6 +83,23 @@ public abstract class ColumnDescriptor {
     }
 
     /**
+     * This gets the display weight.  The display weight is NaN for missing or inexact hits.
+     *
+     * @param feat		feature of interest
+     * @param colIdx	index of the sample column
+     *
+     * @return the display weight for a specified sample column and a specified feature
+     */
+    protected double getDisplayWeight(RnaFeatureData feat, int colIdx) {
+        RnaData.Row row = this.getRow(feat);
+        RnaData.Weight weight = row.getWeight(colIdx);
+        double retVal = Double.NaN;
+        if (weight != null && weight.isExactHit())
+            retVal = weight.getWeight();
+        return retVal;
+    }
+
+    /**
      * Initialize the private data of the descriptor.
      *
      * @return TRUE if the column is valid, else FALSE

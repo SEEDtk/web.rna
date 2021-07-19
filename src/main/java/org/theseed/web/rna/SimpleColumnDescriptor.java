@@ -23,7 +23,7 @@ public class SimpleColumnDescriptor extends ColumnDescriptor {
 
     @Override
     public double getValue(RnaFeatureData feat) {
-        return this.getWeight(feat, this.colIdx);
+        return this.getDisplayWeight(feat, this.colIdx);
     }
 
     @Override

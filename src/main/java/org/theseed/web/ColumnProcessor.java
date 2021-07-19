@@ -534,7 +534,7 @@ public class ColumnProcessor extends WebProcessor {
         } else
             buttons = button;
         DomContent title = join(columnDescriptor.getTitle(), buttons);
-        ColSpec retVal = new ColSpec.Fraction(title);
+        ColSpec retVal = new ColSpec.MaybeFraction(title);
         retVal.setTip(columnDescriptor.getTooltip());
         return retVal;
     }
