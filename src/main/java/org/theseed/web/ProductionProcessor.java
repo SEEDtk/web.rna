@@ -75,6 +75,7 @@ import static j2html.TagCreator.*;
  * --source		name of prediction file to load
  * --max		maxmimum number of table rows to display
  * --first		number (0-based) of first table data row to display
+ * --actual		sort by actual production instead of predicted (where present)
  *
  * @author Bruce Parrello
  *
@@ -159,12 +160,17 @@ public class ProductionProcessor extends WebProcessor {
     @Option(name = "--saved", usage = "use parameter values from cookie string")
     protected String restoreFilters;
 
+    /** cookie file in which to store configuration */
     @Option(name = "--store", usage = "cookie file in which to store configuration")
     protected String storeConfig;
 
-    /** column to sort on */
+    /** column to sort on (if doing a comparison) */
     @Option(name = "--sortCol", usage = "index of column to sort on")
     protected int sortCol;
+
+    /** TRUE if we should sort by actual instead of predicted value (if not doing a comparison) */
+    @Option(name = "--actual", usage = "if specified, the output will be sorted by actual instead of predicted value")
+    protected boolean actual;
 
     /** file of predictions to load */
     @Option(name = "--source", usage = "name of file to load")
@@ -198,6 +204,7 @@ public class ProductionProcessor extends WebProcessor {
         this.maxSamples = 500;
         this.firstSample = 0;
         this.source = "thrall.production.tbl";
+        this.actual = false;
     }
 
     @Override
@@ -235,6 +242,7 @@ public class ProductionProcessor extends WebProcessor {
             cookies.put("compare", this.compare);
             cookies.put("max", this.maxSamples);
             cookies.put("source", this.source);
+            cookies.put("actual", this.actual);
             cookies.flush();
             if (this.storeConfig == null) {
                 this.configMessage = "Default configuration in use.";
@@ -270,7 +278,7 @@ public class ProductionProcessor extends WebProcessor {
         else if (this.compare.charAt(0) == 'I')
             this.tableBuilder = new ProductionInsertTable(this, this.compare.substring(1));
         else
-            this.tableBuilder = new ProductionDisplayTable(this);
+            this.tableBuilder = new ProductionDisplayTable(this, this.actual);
         // Insure delete-nothing is a choice for the insert and delete columns.
         this.choices.get(SampleId.DELETE_COL).add("000");
         this.choices.get(SampleId.INSERT_COL).add("000");
@@ -400,6 +408,7 @@ public class ProductionProcessor extends WebProcessor {
         this.maxPred = cookies.get("maxPred", 5.0);
         this.compare = cookies.get("compare", "(none)");
         this.source = cookies.get("source", "thrall.production.tbl");
+        this.actual = cookies.get("actual", false);
         this.maxSamples = cookies.get("max", Integer.MAX_VALUE);
     }
 
@@ -418,6 +427,8 @@ public class ProductionProcessor extends WebProcessor {
         retVal.addIntRow("max", "Maximum number of samples to show", this.maxSamples, 10, Integer.MAX_VALUE);
         // Create the real-only flag.
         retVal.addCheckBoxWithDefault("real", "Only show samples with real values", this.realOnly);
+        // Create the actual-sort flag.
+        retVal.addCheckBoxWithDefault("actual", "Sort by actual values before predicted", this.actual);
         // Specify the prediction limits.
         retVal.addTextRow("minPred", "Minimum prediction to display", Double.toString(this.minPred));
         retVal.addTextRow("maxPred", "Maximum prediction to display", Double.toString(this.maxPred));

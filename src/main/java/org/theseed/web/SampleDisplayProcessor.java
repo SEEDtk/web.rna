@@ -5,9 +5,6 @@ package org.theseed.web;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.regex.Pattern;
-
-import org.apache.commons.lang3.StringUtils;
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,8 +66,6 @@ public class SampleDisplayProcessor extends WebProcessor {
             String fragment = sample.getFragment(i);
             breakdown.with(li(join(b(title + ":"), fragment)));
         }
-        // Create a search pattern from the sample ID.
-        Pattern samplePattern = Pattern.compile(StringUtils.replace(this.sampleId, "X", "[^_]+"));
         // Now we search for matching samples in the big production table and put them in a table.
         HtmlTable<Key.Text> sampleData = new HtmlTable<Key.Text>(new ColSpec.Normal("sample_id"), new ColSpec.Num("production"),
                 new ColSpec.Num("growth"), new ColSpec.Centered("bad"), new ColSpec.Num("normalized"), new ColSpec.Num("rate"),
@@ -87,10 +82,11 @@ public class SampleDisplayProcessor extends WebProcessor {
             int originCol = bigStream.findField("origins");
             // Loop through the file.
             for (TabbedLineReader.Line line : bigStream) {
-                String inSample = line.get(sampleCol);
-                if (samplePattern.matcher(inSample).matches()) {
+                String inSampleId = line.get(sampleCol);
+                SampleId inSample = new SampleId(inSampleId);
+                if (sample.matches(inSample)) {
                     // Here we found a matching sample.
-                    new Row<Key.Text>(sampleData, new Key.Text(inSample)).addKey().add(line.getDouble(prodCol))
+                    new Row<Key.Text>(sampleData, new Key.Text(inSampleId)).addKey().add(line.getDouble(prodCol))
                             .add(line.getDouble(growthCol)).add(line.getFancyFlag(badCol)).add(line.getDouble(normCol))
                             .add(line.getDouble(rateCol)).add(line.get(strainCol)).add(line.get(originCol));
                 }

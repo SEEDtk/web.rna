@@ -7,6 +7,7 @@ import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
 import static j2html.TagCreator.*;
 
 import org.theseed.samples.SampleId;
+import org.theseed.web.CellContent;
 import org.theseed.web.ColSpec;
 import org.theseed.web.HtmlTable;
 import org.theseed.web.Key;
@@ -25,20 +26,55 @@ public class ProductionDisplayTable implements IProductionTable {
 
     // FIELDS
     /** output table */
-    private HtmlTable<Key.RevFloat> table;
+    private HtmlTable<FloatPairKey> table;
     /** prediction/actual error tracker */
     private SummaryStatistics tracker;
     /** sample counter */
     private int counter;
+    /** actual-used flag */
+    private boolean useActual;
     /** web processor for generating links */
     private WebProcessor processor;
 
-    public ProductionDisplayTable(WebProcessor processor) {
-        this.table = new HtmlTable<Key.RevFloat>(new ColSpec.Normal("Sample"), new ColSpec.Fraction("Predicted"),
+    /**
+     * This is a key class for an actual,predicted pairing.  We sort highest to lowest by predicted
+     * value.  If the actualFlag is on, we sort by actual value and then predicted.
+     */
+    public class FloatPairKey extends Key implements Comparable<FloatPairKey> {
+
+        private double predicted;
+        private double actual;
+
+        public FloatPairKey(double predicted, double actual) {
+            this.predicted = predicted;
+            this.actual = (ProductionDisplayTable.this.useActual ? actual : 0.0);
+        }
+
+        @Override
+        public void store(CellContent cell, ColSpec col) {
+            col.store(cell, this.predicted);
+        }
+
+        @Override
+        public int compareTo(FloatPairKey o) {
+            int retVal = 0;
+            if (! Double.isNaN(this.actual) || ! Double.isNaN(o.actual))
+                retVal = Double.compare(o.actual, this.actual);
+            if (retVal == 0)
+                retVal = Double.compare(o.predicted, this.predicted);
+            return retVal;
+        }
+
+    }
+
+
+    public ProductionDisplayTable(WebProcessor processor, boolean actual) {
+        this.table = new HtmlTable<FloatPairKey>(new ColSpec.Normal("Sample"), new ColSpec.Fraction("Predicted"),
                 new ColSpec.Fraction("Actual"), new ColSpec.Fraction("Growth"));
         this.tracker = new SummaryStatistics();
         this.processor = processor;
         this.counter = 0;
+        this.useActual = actual;
     }
 
     @Override
@@ -47,8 +83,8 @@ public class ProductionDisplayTable implements IProductionTable {
         this.counter++;
         DomContent sampleLink = this.processor.commandLink(sampleName, "rna", "sample", "sample=" + sampleName)
                 .withTarget("_blank");
-        Row<Key.RevFloat> row = new Row<Key.RevFloat>(this.table, new Key.RevFloat(production))
-                .add(sampleLink).addKey();
+        Row<FloatPairKey> row = new Row<FloatPairKey>(this.table, this.new FloatPairKey(production, actual))
+                .add(sampleLink).add(production);
         if (Double.isNaN(actual))
             row.add("").add("");
         else {
