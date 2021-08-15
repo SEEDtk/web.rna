@@ -51,7 +51,7 @@ import static j2html.TagCreator.*;
  * translated to spaces for display to allow wrapping.  Differential columns have two sample names separated by a colored slash.
  * The form for the next column is placed to the right of the table.
  *
- * The positional parameters, as always, are the name of the I data directory and the name of the user workspace.
+ * The positional parameters, as always, are the name of the data directory and the name of the user workspace.
  * The binary repository of the RNA data is in "fpkm.ser" in this directory.
  *
  * The specification of a column is (0) name of primary sample, (1) optional name of secondary sample.  If the second
@@ -82,6 +82,7 @@ import static j2html.TagCreator.*;
  * --group		focus operon/regulon/modulon group for group filtering
  * --filterCol	index of the column to filter on for row filtering on column values
  * --filterMin	minimum value for row filtering on column values
+ * --genes		comma-delimited list of gene names to use for gene filtering
  *
  * @author Bruce Parrello
  *
@@ -207,6 +208,10 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--group", metaVar = "AR2", usage = "operon/modulon/regulon group for row filtering")
     protected String filterGroup;
 
+    /** gene names to use for gene filtering, or blank to use all */
+    @Option(name = "--genes", metaVar = "thrA,thrB", usage = "comma-delimited list of gene names to use for gene filtering")
+    protected String geneNames;
+
     @Override
     protected void setWebDefaults() {
         this.sortCol = -2;
@@ -225,6 +230,7 @@ public class ColumnProcessor extends WebProcessor {
         this.baseLineColoring = true;
         this.filterCol = 0;
         this.filterMin = 0.0;
+        this.geneNames = "";
     }
 
     @Override
@@ -585,6 +591,8 @@ public class ColumnProcessor extends WebProcessor {
         form.addTextRow("focus", "Focus Peg", this.focusPeg);
         form.addSearchRow("subsystem", "Subsystem to highlight", this.subsystem, SUBSYSTEM_LIST);
         form.addSearchRow("group", "Operon/modulon/regulon group for filtering", "", FILTER_GROUP_LIST);
+        // Finally, the gene names.
+        form.addTextRow("genes", "Gene name filter (comma-delimited)", this.geneNames);
         // Add a hidden field to maintain the configuration name.
         form.addHidden("name", this.configuration);
         // Now create the load form.
@@ -713,6 +721,13 @@ public class ColumnProcessor extends WebProcessor {
      */
     public double getFilterColumnValue(RnaFeatureData feat) {
         return this.filterColumnData.getValue(feat);
+    }
+
+    /**
+     * @return the gene name string for filtering
+     */
+    public String getFilterGenes() {
+        return this.geneNames;
     }
 
 }

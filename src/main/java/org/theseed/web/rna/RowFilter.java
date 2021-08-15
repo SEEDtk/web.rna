@@ -90,6 +90,19 @@ public abstract class RowFilter {
             public String getDescription() {
                 return "Only show rows with high values in a specified column.";
             }
+
+        }, GENES {
+
+            @Override
+            public RowFilter create(ColumnProcessor processor) {
+                return new GeneListFilter(processor);
+            }
+
+            @Override
+            public String getDescription() {
+                return "Only show rows for specified genes.";
+            }
+
         };
 
 

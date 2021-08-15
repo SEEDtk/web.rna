@@ -307,10 +307,10 @@ public abstract class ColumnDescriptor {
         DomContent retVal;
         String name = this.getSample(colIdx).getName();
         name = StringUtils.replaceChars(name, '_', ' ');
-        if (this.getSample(colIdx).isSuspicious()) {
-            retVal = em(name);
-        } else {
+        if (this.getSample(colIdx).isGood()) {
             retVal = strong(name);
+        } else {
+            retVal = em(name);
         }
         return retVal;
     }

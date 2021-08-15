@@ -4,6 +4,7 @@ import java.util.Arrays;
 
 import org.theseed.web.ColumnProcessor;
 import org.theseed.web.ColumnSaveProcessor;
+import org.theseed.web.GeneListsProcessor;
 import org.theseed.web.GroupPageProcessor;
 import org.theseed.web.ProductionProcessor;
 import org.theseed.web.RnaMetaProcessor;
@@ -25,6 +26,7 @@ import org.theseed.web.WebProcessor;
  * subsystem	display a subsystem from a GTO
  * group		display the snip data for a modulon/regulon group
  * csv			download the saved CSV produced by the column processor
+ * geneLists	manage the stored gene lists
  *
  */
 public class App
@@ -66,6 +68,9 @@ public class App
             break;
         case "groups" :
             processor = new GroupPageProcessor();
+            break;
+        case "geneLists" :
+            processor = new GeneListsProcessor();
             break;
         default:
             throw new RuntimeException("Invalid command " + command);

@@ -38,7 +38,8 @@ public class ProductionDisplayTable implements IProductionTable {
 
     /**
      * This is a key class for an actual,predicted pairing.  We sort highest to lowest by predicted
-     * value.  If the actualFlag is on, we sort by actual value and then predicted.
+     * value.  If the actualFlag is on, we sort by actual value and then predicted.  When the actual
+     * value is missing, we put the predicted value in its place.
      */
     public class FloatPairKey extends Key implements Comparable<FloatPairKey> {
 
@@ -47,7 +48,9 @@ public class ProductionDisplayTable implements IProductionTable {
 
         public FloatPairKey(double predicted, double actual) {
             this.predicted = predicted;
-            this.actual = (ProductionDisplayTable.this.useActual ? actual : 0.0);
+            if (Double.isNaN(actual))
+                actual = predicted;
+            this.actual = (ProductionDisplayTable.this.useActual ? actual : predicted);
         }
 
         @Override

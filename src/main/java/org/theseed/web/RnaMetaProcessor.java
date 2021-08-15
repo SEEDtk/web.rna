@@ -10,6 +10,7 @@ import org.kohsuke.args4j.Option;
 import org.theseed.reports.PageWriter;
 import org.theseed.rna.RnaData;
 
+import j2html.tags.ContainerTag;
 import j2html.tags.DomContent;
 import static j2html.TagCreator.*;
 
@@ -38,9 +39,14 @@ public class RnaMetaProcessor extends WebProcessor {
     @Option(name = "--name", usage = "configuration name")
     protected String configuration;
 
+    /** if specified, only quality samples are shown */
+    @Option(name = "--all", usage = "show low-quality strains")
+    protected boolean allFlag;
+
     @Override
     protected void setWebDefaults() {
         this.configuration = "Default";
+        this.allFlag = false;
     }
 
     @Override
@@ -67,21 +73,48 @@ public class RnaMetaProcessor extends WebProcessor {
                 new ColSpec.Num("pct_expressed"));
         // Run through the samples, adding rows.  Note the first column contains a checkbox.
         for (RnaData.JobData sample : data.getSamples()) {
-            new Row<Key.Null>(table, Key.NONE).add(input().withType("checkbox").withName("sample1").withValue(sample.getName()))
-                    .add(sample.getName()).add(sample.getProduction())
-                    .add(sample.getOpticalDensity()).add(sample.getOldName()).add(sample.getReadCount())
-                    .add(sample.getBaseCount()).add(sample.getQuality()).add(sample.getProcessingDate().toString())
-                    .add(sample.getMeanReadLen()).add(sample.getCoverage(GENOME_LEN)).add(sample.getExpressedPercent(data));
+            DomContent sampleName = text(sample.getName());
+            boolean keep = true;
+            if (! sample.isGood()) {
+                if (! this.allFlag)
+                    keep = false;
+                else {
+                    sampleName = em(sample.getName());
+                }
+            }
+            if (keep) {
+                new Row<Key.Null>(table, Key.NONE).add(input().withType("checkbox").withName("sample1").withValue(sample.getName()))
+                        .add(sampleName).add(sample.getProduction())
+                        .add(sample.getOpticalDensity()).add(sample.getOldName()).add(sample.getReadCount())
+                        .add(sample.getBaseCount()).add(sample.getQuality()).add(sample.getProcessingDate().toString())
+                        .add(sample.getMeanReadLen()).add(sample.getCoverage(GENOME_LEN)).add(sample.getExpressedPercent());
+            }
         }
-        // Get the page writer, and format the table as a form.
+        // Get the page writer.
         PageWriter writer = this.getPageWriter();
+        // Set up a link to switch modes.
+        String nameParm = "name=" + this.configuration;
+        String[] parms;
+        String label;
+        if (this.allFlag) {
+            parms = new String[] { nameParm };
+            label = "Hide low-quality samples.";
+        } else {
+            parms = new String[] { nameParm, "all=on" };
+            label = "Show all samples.";
+        }
+        ContainerTag switchLink = p(a(label).withHref(this.commandUrl("rna", "meta", parms)));
+        // Format the table as a form.
         DomContent submitForm = form().withMethod("POST")
                 .withAction(this.commandUrl("rna", "columns"))
                 .withClass("web").with(p(join("Add checked samples to RNA Seq page configuration",
-                        input().withValue(this.configuration).withType("text").withName("name"), input().withType("submit"))))
+                        input().withValue(this.configuration).withType("text").withName("name"),
+                        " showing genes ", input().withValue("").withType("text").withName("genes"),
+                        input().withType("hidden").withName("rowFilter").withValue("GENES"),
+                        input().withType("submit"))))
                 .with(table.output());
         DomContent tableHtml = this.getPageWriter().highlightBlock(submitForm);
-        writer.writePage("RNA Seq Metadata", text("Table of Samples"), tableHtml);
+        writer.writePage("RNA Seq Metadata", text("Table of Samples"), switchLink, tableHtml);
     }
 
 }
