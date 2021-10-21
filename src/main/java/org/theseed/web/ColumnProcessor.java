@@ -242,7 +242,7 @@ public class ColumnProcessor extends WebProcessor {
             this.data = RnaData.load(dataFile);
             log.info("{} samples in RNA dataset {}.", this.data.size(), dataFile);
         } catch (ClassNotFoundException e) {
-            throw new RuntimeException("Class not found: " + e.getMessage());
+            throw new RuntimeException("Class not found: " + e.toString());
         }
         // Verify the samples.
         for (String samplei : this.sample1) {
