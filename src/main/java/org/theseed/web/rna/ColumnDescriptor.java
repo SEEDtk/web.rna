@@ -273,9 +273,22 @@ public abstract class ColumnDescriptor {
      */
     public static int getSortCol(String cookieString) {
         int retVal = 0;
-        String sortPart = StringUtils.substringAfter(cookieString, SORT_SEP_CHAR);
-        if (! sortPart.isEmpty())
-            retVal = Integer.valueOf(sortPart);
+        String[] parts = StringUtils.splitPreserveAllTokens(cookieString, SORT_SEP_CHAR);
+        if (parts.length >= 2 && ! parts[1].isEmpty())
+            retVal = Integer.valueOf(parts[1]);
+        return retVal;
+    }
+
+    /**
+     * @return the database type for the specified definition string
+     *
+     * @param cookieString		column definition string
+     */
+    public static RnaDataType getDbType(String cookieString) {
+        RnaDataType retVal = RnaDataType.ENGINEERED;
+        String[] parts = StringUtils.splitPreserveAllTokens(cookieString, SORT_SEP_CHAR);
+        if (parts.length >= 3 && ! parts[2].isEmpty())
+            retVal = RnaDataType.values()[Integer.valueOf(parts[2])];
         return retVal;
     }
 
@@ -293,9 +306,11 @@ public abstract class ColumnDescriptor {
      *
      * @param cookieString		column string
      * @param sortCol			sort column
+     * @param rnaType			rna database type
      */
-    public static String savecookies(String cookieString, int sortCol) {
-        return String.format("%s%s%d", cookieString, SORT_SEP_CHAR, sortCol);
+    public static String savecookies(String cookieString, int sortCol, RnaDataType rnaType) {
+        return String.format("%s%s%d%s%d", cookieString, SORT_SEP_CHAR, sortCol,
+                SORT_SEP_CHAR, rnaType.ordinal());
     }
 
     /**

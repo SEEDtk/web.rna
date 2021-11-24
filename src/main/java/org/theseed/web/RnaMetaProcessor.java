@@ -9,6 +9,8 @@ import java.io.IOException;
 import org.kohsuke.args4j.Option;
 import org.theseed.reports.PageWriter;
 import org.theseed.rna.RnaData;
+import org.theseed.web.rna.ColumnDescriptor;
+import org.theseed.web.rna.RnaDataType;
 
 import j2html.tags.ContainerTag;
 import j2html.tags.DomContent;
@@ -61,8 +63,11 @@ public class RnaMetaProcessor extends WebProcessor {
 
     @Override
     protected void runWebCommand(CookieFile cookies) throws Exception {
+        // Get the database type from the cookie string.
+        String oldCookieString = cookies.get(ColumnProcessor.COLUMNS_PREFIX + this.configuration, "");
+        RnaDataType cookieType = ColumnDescriptor.getDbType(oldCookieString);
         // This is a very simple web page:  we just build a table from the sample records.
-        File dataFile = new File(this.getCoreDir(), ColumnProcessor.RNA_DATA_FILE_NAME);
+        File dataFile = new File(this.getCoreDir(), cookieType.getFileName());
         RnaData data = RnaData.load(dataFile);
         log.info("{} samples in RNA dataset {}.", data.size(), dataFile);
         // Create a table for the meta-data.

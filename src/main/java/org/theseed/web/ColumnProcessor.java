@@ -31,6 +31,7 @@ import org.theseed.web.rna.ColumnDescriptor;
 import org.theseed.web.rna.ColumnQualifierType;
 import org.theseed.web.rna.MultiKey;
 import org.theseed.web.rna.NewColumnCreator;
+import org.theseed.web.rna.RnaDataType;
 import org.theseed.web.rna.RowFilter;
 import org.theseed.web.rna.SimpleColumnDescriptor;
 
@@ -70,7 +71,7 @@ import static j2html.TagCreator.*;
  * --sortCol	index of the column to sort on
  * --deleteCol	index of a column to delete
  * --reset		erase all of the saved columns (this automatically changes sortCol to 1)
- * --raw		display raw numbers instead of normalized results
+ * --type		type of RNA Seq data to display
  * --name		name of the column configuration to use
  * --cmd		command to run for new columns:  TIME1 (all times for sample 1), TIMES (matching times for both samples),
  * 				SINGLE (only one column)
@@ -161,8 +162,8 @@ public class ColumnProcessor extends WebProcessor {
     protected int deleteCol;
 
     /** if specified, raw numbers will be displayed */
-    @Option(name = "--raw", usage = "display raw FPKM instead of TPM")
-    protected boolean rawFlag;
+    @Option(name = "--type", usage = "RNA database to display")
+    protected RnaDataType rnaType;
 
     /** reset flag */
     @Option(name = "--reset", usage = "if specified, existing columns are deleted")
@@ -219,7 +220,7 @@ public class ColumnProcessor extends WebProcessor {
         this.sample1 = new ArrayList<String>();
         this.sample2 = "";
         this.resetFlag = false;
-        this.rawFlag = false;
+        this.rnaType = null;
         this.configuration = "Default";
         this.strategy = NewColumnCreator.Type.SINGLE;
         this.colFilter = ColumnQualifierType.NONE;
@@ -235,22 +236,6 @@ public class ColumnProcessor extends WebProcessor {
 
     @Override
     protected boolean validateWebParms() throws IOException, ParseFailureException {
-        // Read in the RNA data file.
-        try {
-            log.info("Loading RNA-seq data.");
-            File dataFile = new File(this.getCoreDir(), (this.rawFlag ? RNA_RAW_DATA_FILE_NAME : RNA_DATA_FILE_NAME));
-            this.data = RnaData.load(dataFile);
-            log.info("{} samples in RNA dataset {}.", this.data.size(), dataFile);
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException("Class not found: " + e.toString());
-        }
-        // Verify the samples.
-        for (String samplei : this.sample1) {
-            if (! samplei.isEmpty() && this.data.getColIdx(samplei) < 0)
-                throw new ParseFailureException("Invalid sample name " + samplei + ".");
-        }
-        if (! this.sample2.isEmpty() && ! this.sample2.contentEquals("baseline") && this.data.getColIdx(this.sample2) < 0)
-            throw new ParseFailureException("Invalid sample name " + this.sample2 + ".");
         // Insure the configuration name is valid.
         this.configuration = ColumnSaveProcessor.computeNewName(this.configuration);
         // Verify the ranges.
@@ -286,6 +271,29 @@ public class ColumnProcessor extends WebProcessor {
         // We will write the genes displayed to the save file.
         try (PrintWriter saveStream = new PrintWriter(saveFile)) {
             saveStream.println("b-number,value");
+            // Get the old columns.
+            String oldCookieString = cookies.get(COLUMNS_PREFIX + this.configuration, "");
+            // Set the database type.  If no explicit type is set, we use the type from the cookie
+            // string.
+            RnaDataType cookieType = ColumnDescriptor.getDbType(oldCookieString);
+            if (this.rnaType == null)
+                this.rnaType = cookieType;
+            // Read in the RNA data file.
+            try {
+                log.info("Loading RNA-seq data.");
+                File dataFile = new File(this.getCoreDir(), this.rnaType.getFileName());
+                this.data = RnaData.load(dataFile);
+                log.info("{} samples in RNA dataset {}.", this.data.size(), dataFile);
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException("Class not found: " + e.toString());
+            }
+            // Verify the samples.
+            for (String samplei : this.sample1) {
+                if (! samplei.isEmpty() && this.data.getColIdx(samplei) < 0)
+                    throw new ParseFailureException("Invalid sample name " + samplei + ".");
+            }
+            if (! this.sample2.isEmpty() && ! this.sample2.contentEquals("baseline") && this.data.getColIdx(this.sample2) < 0)
+                throw new ParseFailureException("Invalid sample name " + this.sample2 + ".");
             // Get the subsystem table.
             File subFile = new File(this.getCoreDir(), "rnaSubs.txt");
             this.subTable = new GenomeSubsystemTable(subFile);
@@ -293,11 +301,10 @@ public class ColumnProcessor extends WebProcessor {
             this.filterGroupList = new TreeSet<String>();
             // Create the list of samples.
             this.samples = this.data.getSamples().stream().map(x -> x.getName()).collect(Collectors.toList());
-            // Build the cookie string describing all the columns.
+            // Build the cookie string describing all the columns.  If the database has changed it's the
+            // same as a reset.
             String cookieString = "";
-            if (! this.resetFlag) {
-                // Here we are not resetting, so we want to keep the old columns.
-                String oldCookieString = cookies.get(COLUMNS_PREFIX + this.configuration, "");
+            if (! this.resetFlag && cookieType == this.rnaType) {
                 if (this.sample1.isEmpty() && this.strategy.requires1()) {
                     // Here no columns are being added.  We add a blank column to clear the sort string.
                     cookieString = ColumnDescriptor.addColumn(oldCookieString, ",");
@@ -322,7 +329,8 @@ public class ColumnProcessor extends WebProcessor {
                 }
             }
             // Save the columns for next time.
-            cookies.put(COLUMNS_PREFIX + this.configuration, ColumnDescriptor.savecookies(cookieString, this.sortCol));
+            cookies.put(COLUMNS_PREFIX + this.configuration,
+                    ColumnDescriptor.savecookies(cookieString, this.sortCol, this.rnaType));
             // Split the cookie string into columns.
             ColumnDescriptor[] columns = ColumnDescriptor.parse(cookieString, this.data);
             // The two page components will be put here.
@@ -554,8 +562,13 @@ public class ColumnProcessor extends WebProcessor {
      * @throws IOException
      */
     private DomContent buildForms(ColumnDescriptor[] columns, CookieFile cookies) throws IOException {
-        // Here we must build the filtering checkboxes.
-        HtmlTable<Key.Null> filterTable = this.buildFilters();
+        // Figure out if we have engineered samples or not.  If we do, we need filters.
+        boolean filterable = this.rnaType.isEngineered();
+        DomContent filters = p();
+        if (filterable) {
+            HtmlTable<Key.Null> filterTable = this.buildFilters();
+            filters = filterTable.output();
+        }
         // Now we build the main form.
         HtmlForm form = new HtmlForm("rna", "columns", this);
         // Get the list of samples and add the null selection.
@@ -576,9 +589,10 @@ public class ColumnProcessor extends WebProcessor {
         form.addChoiceIndexedRow("sortCol", "Column for sorting", defaultCol, sortCols, "Sort by Location");
         // Add the strategy.
         form.addEnumRow("cmd", "New-column Strategy", NewColumnCreator.Type.SINGLE, NewColumnCreator.Type.values());
-        // Add the checkboxes.
+        // Add the rest checkbox.
         form.addCheckBoxWithDefault("reset", "Remove existing columns", false);
-        form.addCheckBoxWithDefault("raw", "display raw FPKM numbers", this.rawFlag);
+        // Add the source database.
+        form.addEnumRow("type", "RNA Database", this.rnaType, RnaDataType.values());
         // Add the coloring controls.
         form.addTextRow("ranges", "Comma-delimited list of range-coloring limits (no spaces)", this.ranges);
         form.addEnumRow("rowFilter", "Row-filtering rule", this.rowFilter, RowFilter.Type.values());
@@ -621,7 +635,7 @@ public class ColumnProcessor extends WebProcessor {
         DomContent downloadLinkHtml = a("Download CSV of Selected Genes").withHref(downloadLink);
         // Form the page.
         DomContent retVal = div(h2(metaLinkHtml), h2("Add New Column / Configure").withClass("form"),
-                filterTable.output(), form.output(), h2(downloadLinkHtml),
+                filters, form.output(), h2(downloadLinkHtml),
                 h2("Save Configuration").withClass("form"), sForm.output(), iFrame,
                 h2("Load Configuration").withClass("form"), lForm.output(), h2(manageLinkHtml)
                 ).withClass("center");
