@@ -283,12 +283,13 @@ public abstract class ColumnDescriptor {
      * @return the database type for the specified definition string
      *
      * @param cookieString		column definition string
+     * @param rnaTypes			RNA data type array
      */
-    public static RnaDataType getDbType(String cookieString) {
-        RnaDataType retVal = RnaDataType.ENGINEERED;
+    public static RnaDataType getDbType(String cookieString, RnaDataType[] rnaTypes) {
+        RnaDataType retVal = rnaTypes[0];
         String[] parts = StringUtils.splitPreserveAllTokens(cookieString, SORT_SEP_CHAR);
         if (parts.length >= 3 && ! parts[2].isEmpty())
-            retVal = RnaDataType.values()[Integer.valueOf(parts[2])];
+            retVal = rnaTypes[Integer.valueOf(parts[2])];
         return retVal;
     }
 

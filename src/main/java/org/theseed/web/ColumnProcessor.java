@@ -64,10 +64,10 @@ import static j2html.TagCreator.*;
  *
  * The command-line options are as follows.
  *
- * --sample1	name of the primary sample for the next column
+ * --sample1	name of the primary sample for the next column; more than one of these can be specified
  * --sample2	name of the secondary sample (optional)
- * --samplei	name of a sample to display (optional); more than one of these can be specified, and they act as
- * 				additional values to sample1
+ * --samples	comma-delimited list of samples to display; overrides the other sample-based parameters
+ * 				and displays even if resetting
  * --sortCol	index of the column to sort on
  * --deleteCol	index of a column to delete
  * --reset		erase all of the saved columns (this automatically changes sortCol to 1)
@@ -117,6 +117,12 @@ public class ColumnProcessor extends WebProcessor {
     private Set<String> filterGroupList;
     /** column descriptor for filtering column */
     private ColumnDescriptor filterColumnData;
+    /** rna data type array */
+    private RnaDataType[] rnaTypes;
+    /** actual RNA data type */
+    private RnaDataType rnaType;
+    /** set of override samples */
+    private Set<String> overrideSamples;
     /** cookie file name */
     public static final String RNA_COLUMN_COOKIE_FILE = "web.rna.columns";
     /** TPM file name */
@@ -153,6 +159,10 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--sample2", usage = "secondary sample name")
     protected String sample2;
 
+    /** list of samples to display; this is used to force a complete reload */
+    @Option(name = "--samples", usage = "reset and display a new set of samples")
+    protected String sampleOverrides;
+
     /** index of sort column (0 = first data column, negative = use saved value) */
     @Option(name = "--sortCol", usage = "sort column index")
     protected int sortCol;
@@ -161,9 +171,9 @@ public class ColumnProcessor extends WebProcessor {
     @Option(name = "--deleteCol", usage = "index of column to delete")
     protected int deleteCol;
 
-    /** if specified, raw numbers will be displayed */
+    /** name of database to display */
     @Option(name = "--type", usage = "RNA database to display")
-    protected RnaDataType rnaType;
+    protected String rnaTypeName;
 
     /** reset flag */
     @Option(name = "--reset", usage = "if specified, existing columns are deleted")
@@ -232,6 +242,8 @@ public class ColumnProcessor extends WebProcessor {
         this.filterCol = 0;
         this.filterMin = 0.0;
         this.geneNames = "";
+        this.overrideSamples = null;
+        this.sampleOverrides = null;
     }
 
     @Override
@@ -253,9 +265,19 @@ public class ColumnProcessor extends WebProcessor {
             this.baseLineColoring = false;
         }
         this.rowFilterObject = this.rowFilter.create(this);
+        // Analyze the RNA data type.
+        this.rnaTypes = RnaDataType.values(this.getCoreDir());
+        if (this.rnaTypeName != null) {
+            boolean found = Arrays.stream(this.rnaTypes).anyMatch(x -> x.name().equals(this.rnaTypeName));
+            if (! found)
+                throw new ParseFailureException("Illegal RNA database name \"" + this.rnaTypeName + "\".");
+        }
         // If baseline coloring is in effect, we color value columns only.
         if (this.baseLineColoring)
             this.colFilter = ColumnQualifierType.VALUE;
+        // Finally, set up the override samples.
+        if (this.sampleOverrides != null)
+            this.overrideSamples = new TreeSet<String>(Arrays.asList(StringUtils.split(this.sampleOverrides, ',')));
         return true;
     }
 
@@ -275,9 +297,11 @@ public class ColumnProcessor extends WebProcessor {
             String oldCookieString = cookies.get(COLUMNS_PREFIX + this.configuration, "");
             // Set the database type.  If no explicit type is set, we use the type from the cookie
             // string.
-            RnaDataType cookieType = ColumnDescriptor.getDbType(oldCookieString);
-            if (this.rnaType == null)
+            RnaDataType cookieType = ColumnDescriptor.getDbType(oldCookieString, rnaTypes);
+            if (this.rnaTypeName == null)
                 this.rnaType = cookieType;
+            else
+                this.rnaType = new RnaDataType(this.rnaTypeName);
             // Read in the RNA data file.
             try {
                 log.info("Loading RNA-seq data.");
@@ -304,7 +328,14 @@ public class ColumnProcessor extends WebProcessor {
             // Build the cookie string describing all the columns.  If the database has changed it's the
             // same as a reset.
             String cookieString = "";
-            if (! this.resetFlag && cookieType == this.rnaType) {
+            if (this.overrideSamples != null) {
+                // Here we have an override, which means we display the incoming samples in order.
+                for (String sample : this.overrideSamples) {
+                    cookieString = ColumnDescriptor.addColumn(cookieString, sample);
+                    if (! this.samples.contains(sample))
+                        throw new ParseFailureException("Invalid sample name \"" + sample + "\" specified.");
+                }
+            } else if (! this.resetFlag && cookieType == this.rnaType) {
                 if (this.sample1.isEmpty() && this.strategy.requires1()) {
                     // Here no columns are being added.  We add a blank column to clear the sort string.
                     cookieString = ColumnDescriptor.addColumn(oldCookieString, ",");
@@ -592,7 +623,8 @@ public class ColumnProcessor extends WebProcessor {
         // Add the rest checkbox.
         form.addCheckBoxWithDefault("reset", "Remove existing columns", false);
         // Add the source database.
-        form.addEnumRow("type", "RNA Database", this.rnaType, RnaDataType.values());
+        List<String> sources = Arrays.stream(this.rnaTypes).map(x -> x.name()).collect(Collectors.toList());
+        form.addChoiceRow("type", "RNA Database", this.rnaType.name(), sources);
         // Add the coloring controls.
         form.addTextRow("ranges", "Comma-delimited list of range-coloring limits (no spaces)", this.ranges);
         form.addEnumRow("rowFilter", "Row-filtering rule", this.rowFilter, RowFilter.Type.values());

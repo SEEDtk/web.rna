@@ -6,6 +6,8 @@ package org.theseed.web.rna;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
+import java.io.File;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -16,8 +18,10 @@ public class TestColDescriptor {
 
     @Test
     public void testDelete() {
+        File workDir = new File("data", "clusters");
+        RnaDataType[] rnaTypes = RnaDataType.values(workDir);
         String cookieString = "A,;B,B;C,;D,;E,E";
-        assertThat(ColumnDescriptor.getDbType(cookieString), equalTo(RnaDataType.ENGINEERED));
+        assertThat(ColumnDescriptor.getDbType(cookieString, rnaTypes), equalTo(rnaTypes[0]));
         assertThat(ColumnDescriptor.getSortCol(cookieString), equalTo(0));
         String cookie2 = ColumnDescriptor.deleteColumn(cookieString, 2);
         assertThat(cookie2, equalTo("A,;B,B;D,;E,E"));
@@ -32,10 +36,12 @@ public class TestColDescriptor {
     @Test
     public void testCookieParse() {
         String cookieString = "A,B;C,D|10";
+        File workDir = new File("data", "clusters");
+        RnaDataType[] rnaTypes = RnaDataType.values(workDir);
         assertThat(ColumnDescriptor.getSortCol(cookieString), equalTo(10));
-        assertThat(ColumnDescriptor.getDbType(cookieString), equalTo(RnaDataType.ENGINEERED));
+        assertThat(ColumnDescriptor.getDbType(cookieString, rnaTypes), equalTo(rnaTypes[0]));
         cookieString = "C,D;E,|10|1";
-        assertThat(ColumnDescriptor.getDbType(cookieString), equalTo(RnaDataType.BASELINE));
+        assertThat(ColumnDescriptor.getDbType(cookieString, rnaTypes), equalTo(rnaTypes[1]));
     }
 
 }

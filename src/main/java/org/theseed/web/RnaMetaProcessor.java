@@ -25,6 +25,7 @@ import static j2html.TagCreator.*;
  * The command-line options are as follows.
  *
  * --name	name of the current column configuration
+ * --type	database type to display (or NULL to use what is already in the configuration)
  *
  * @author Bruce Parrello
  *
@@ -32,6 +33,8 @@ import static j2html.TagCreator.*;
 public class RnaMetaProcessor extends WebProcessor {
 
     // FIELDS
+    /** rna data type array */
+    private RnaDataType[] rnaTypes;
     /** length of E coli genome */
     public static final int GENOME_LEN = 4638920;
 
@@ -41,6 +44,10 @@ public class RnaMetaProcessor extends WebProcessor {
     @Option(name = "--name", usage = "configuration name")
     protected String configuration;
 
+    /** database type */
+    @Option(name = "--type", usage = "database type")
+    protected String rnaTypeName;
+
     /** if specified, only quality samples are shown */
     @Option(name = "--all", usage = "show low-quality strains")
     protected boolean allFlag;
@@ -49,6 +56,7 @@ public class RnaMetaProcessor extends WebProcessor {
     protected void setWebDefaults() {
         this.configuration = "Default";
         this.allFlag = false;
+        this.rnaTypeName = null;
     }
 
     @Override
@@ -63,11 +71,14 @@ public class RnaMetaProcessor extends WebProcessor {
 
     @Override
     protected void runWebCommand(CookieFile cookies) throws Exception {
+        this.rnaTypes = RnaDataType.values(this.getCoreDir());
         // Get the database type from the cookie string.
         String oldCookieString = cookies.get(ColumnProcessor.COLUMNS_PREFIX + this.configuration, "");
-        RnaDataType cookieType = ColumnDescriptor.getDbType(oldCookieString);
+        RnaDataType cookieType = ColumnDescriptor.getDbType(oldCookieString, this.rnaTypes);
         // This is a very simple web page:  we just build a table from the sample records.
-        File dataFile = new File(this.getCoreDir(), cookieType.getFileName());
+        if (this.rnaTypeName == null)
+            this.rnaTypeName = cookieType.getFileName();
+        File dataFile = new File(this.getCoreDir(), this.rnaTypeName);
         RnaData data = RnaData.load(dataFile);
         log.info("{} samples in RNA dataset {}.", data.size(), dataFile);
         // Create a table for the meta-data.
@@ -116,6 +127,7 @@ public class RnaMetaProcessor extends WebProcessor {
                         input().withValue(this.configuration).withType("text").withName("name"),
                         " showing genes ", input().withValue("").withType("text").withName("genes"),
                         input().withType("hidden").withName("rowFilter").withValue("GENES"),
+                        input().withType("hidden").withName("type").withValue(this.rnaTypeName),
                         input().withType("submit"))))
                 .with(table.output());
         DomContent tableHtml = this.getPageWriter().highlightBlock(submitForm);
