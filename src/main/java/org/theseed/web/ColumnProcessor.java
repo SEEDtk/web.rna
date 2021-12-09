@@ -66,8 +66,6 @@ import static j2html.TagCreator.*;
  *
  * --sample1	name of the primary sample for the next column; more than one of these can be specified
  * --sample2	name of the secondary sample (optional)
- * --samples	comma-delimited list of samples to display; overrides the other sample-based parameters
- * 				and displays even if resetting
  * --sortCol	index of the column to sort on
  * --deleteCol	index of a column to delete
  * --reset		erase all of the saved columns (this automatically changes sortCol to 1)
@@ -121,8 +119,6 @@ public class ColumnProcessor extends WebProcessor {
     private RnaDataType[] rnaTypes;
     /** actual RNA data type */
     private RnaDataType rnaType;
-    /** set of override samples */
-    private Set<String> overrideSamples;
     /** cookie file name */
     public static final String RNA_COLUMN_COOKIE_FILE = "web.rna.columns";
     /** TPM file name */
@@ -158,10 +154,6 @@ public class ColumnProcessor extends WebProcessor {
     /** name of secondary sample (if none, column is not differential, if "baseline", column is sample over baseline) */
     @Option(name = "--sample2", usage = "secondary sample name")
     protected String sample2;
-
-    /** list of samples to display; this is used to force a complete reload */
-    @Option(name = "--samples", usage = "reset and display a new set of samples")
-    protected String sampleOverrides;
 
     /** index of sort column (0 = first data column, negative = use saved value) */
     @Option(name = "--sortCol", usage = "sort column index")
@@ -242,8 +234,6 @@ public class ColumnProcessor extends WebProcessor {
         this.filterCol = 0;
         this.filterMin = 0.0;
         this.geneNames = "";
-        this.overrideSamples = null;
-        this.sampleOverrides = null;
     }
 
     @Override
@@ -264,9 +254,9 @@ public class ColumnProcessor extends WebProcessor {
             Arrays.sort(this.rangeLimits);
             this.baseLineColoring = false;
         }
-        this.rowFilterObject = this.rowFilter.create(this);
         // Analyze the RNA data type.
         this.rnaTypes = RnaDataType.values(this.getCoreDir());
+        log.info("{} RNA databases found.", this.rnaTypes.length);
         if (this.rnaTypeName != null) {
             boolean found = Arrays.stream(this.rnaTypes).anyMatch(x -> x.name().equals(this.rnaTypeName));
             if (! found)
@@ -275,9 +265,6 @@ public class ColumnProcessor extends WebProcessor {
         // If baseline coloring is in effect, we color value columns only.
         if (this.baseLineColoring)
             this.colFilter = ColumnQualifierType.VALUE;
-        // Finally, set up the override samples.
-        if (this.sampleOverrides != null)
-            this.overrideSamples = new TreeSet<String>(Arrays.asList(StringUtils.split(this.sampleOverrides, ',')));
         return true;
     }
 
@@ -304,18 +291,25 @@ public class ColumnProcessor extends WebProcessor {
                 this.rnaType = new RnaDataType(this.rnaTypeName);
             // Read in the RNA data file.
             try {
-                log.info("Loading RNA-seq data.");
+                log.info("Loading RNA-seq data from {}.", this.rnaType.getDescription());
                 File dataFile = new File(this.getCoreDir(), this.rnaType.getFileName());
                 this.data = RnaData.load(dataFile);
                 log.info("{} samples in RNA dataset {}.", this.data.size(), dataFile);
             } catch (ClassNotFoundException e) {
                 throw new RuntimeException("Class not found: " + e.toString());
             }
+            // Set up the row filtering.
+            this.rowFilterObject = this.rowFilter.create(this);
             // Verify the samples.
+            int sampleCount = 0;
             for (String samplei : this.sample1) {
-                if (! samplei.isEmpty() && this.data.getColIdx(samplei) < 0)
-                    throw new ParseFailureException("Invalid sample name " + samplei + ".");
+                if (! samplei.isEmpty()) {
+                    sampleCount++;
+                    if (this.data.getColIdx(samplei) < 0)
+                        throw new ParseFailureException("Invalid sample name " + samplei + ".");
+                }
             }
+            log.info("{} primary samples specified.", sampleCount);
             if (! this.sample2.isEmpty() && ! this.sample2.contentEquals("baseline") && this.data.getColIdx(this.sample2) < 0)
                 throw new ParseFailureException("Invalid sample name " + this.sample2 + ".");
             // Get the subsystem table.
@@ -328,14 +322,9 @@ public class ColumnProcessor extends WebProcessor {
             // Build the cookie string describing all the columns.  If the database has changed it's the
             // same as a reset.
             String cookieString = "";
-            if (this.overrideSamples != null) {
-                // Here we have an override, which means we display the incoming samples in order.
-                for (String sample : this.overrideSamples) {
-                    cookieString = ColumnDescriptor.addColumn(cookieString, sample);
-                    if (! this.samples.contains(sample))
-                        throw new ParseFailureException("Invalid sample name \"" + sample + "\" specified.");
-                }
-            } else if (! this.resetFlag && cookieType == this.rnaType) {
+            log.info("New type is {}. Cookie type is {}.  Reset mode is {}.",
+                    this.rnaType.getDescription(), cookieType.getDescription(), this.resetFlag);
+            if (! this.resetFlag && cookieType.equals(this.rnaType)) {
                 if (this.sample1.isEmpty() && this.strategy.requires1()) {
                     // Here no columns are being added.  We add a blank column to clear the sort string.
                     cookieString = ColumnDescriptor.addColumn(oldCookieString, ",");

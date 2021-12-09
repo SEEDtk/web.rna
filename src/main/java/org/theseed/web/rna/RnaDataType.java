@@ -87,8 +87,10 @@ public class RnaDataType implements IDescribable {
         retVal[0] = new RnaDataType("tpm.ser");
         retVal[1] = new RnaDataType("ecoli.ser");
         // Now add the clusters.
-        for (int i = 0; i < clusters.length; i++)
-            retVal[i+2] = new RnaDataType(clusters[i]);
+        for (int i = 0; i < clusters.length; i++) {
+            RnaDataType type = new RnaDataType(clusters[i]);
+            retVal[type.ordinal] = type;
+        }
         return retVal;
     }
 
@@ -121,6 +123,33 @@ public class RnaDataType implements IDescribable {
      */
     public int ordinal() {
         return this.ordinal;
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((this.baseName == null) ? 0 : this.baseName.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof RnaDataType)) {
+            return false;
+        }
+        RnaDataType other = (RnaDataType) obj;
+        if (this.baseName == null) {
+            if (other.baseName != null) {
+                return false;
+            }
+        } else if (!this.baseName.equals(other.baseName)) {
+            return false;
+        }
+        return true;
     }
 
 }
