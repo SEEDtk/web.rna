@@ -15,7 +15,7 @@ import org.theseed.web.WebProcessor;
 /**
  * Commands for Web Pages for RNA Threonine Display.
  *
- * columns		show columnar comparison data for FPKM and TPM results
+ * columns		show columnar comparison data for TPM and TPM results
  * meta			show metadata for samples
  * saveCols		save the current column configuration under a new name
  * manage		manage saved column specifications
