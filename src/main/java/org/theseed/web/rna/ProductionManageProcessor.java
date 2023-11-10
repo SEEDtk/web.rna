@@ -18,7 +18,7 @@ import java.util.regex.Matcher;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.TextStringBuilder;
-import org.theseed.utils.ParseFailureException;
+import org.theseed.basic.ParseFailureException;
 import org.theseed.web.CookieFile;
 import org.theseed.web.HtmlForm;
 import org.theseed.web.ProductionProcessor;

@@ -12,10 +12,10 @@ import java.util.stream.Collectors;
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.theseed.basic.ParseFailureException;
 import org.theseed.genome.Genome;
 import org.theseed.genome.SubsystemRow;
 import org.theseed.reports.LinkObject;
-import org.theseed.utils.ParseFailureException;
 
 import j2html.tags.ContainerTag;
 import j2html.tags.DomContent;

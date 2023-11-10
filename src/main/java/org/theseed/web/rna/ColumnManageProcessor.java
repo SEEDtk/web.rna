@@ -10,7 +10,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
-import org.theseed.utils.ParseFailureException;
+import org.theseed.basic.ParseFailureException;
 import org.theseed.web.ColumnProcessor;
 import org.theseed.web.ColumnSaveProcessor;
 import org.theseed.web.CookieFile;

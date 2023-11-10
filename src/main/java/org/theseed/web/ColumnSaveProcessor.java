@@ -9,7 +9,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.theseed.utils.ParseFailureException;
+import org.theseed.basic.ParseFailureException;
 import org.theseed.web.rna.ColumnDescriptor;
 
 import j2html.tags.DomContent;
