@@ -10,9 +10,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.theseed.counters.BestColumn;
 import org.theseed.reports.CoreHtmlUtilities;
 import org.theseed.samples.SampleId;
+import org.theseed.stats.BestColumn;
 import org.theseed.web.ColSpec;
 import org.theseed.web.HtmlTable;
 import org.theseed.web.Key;
